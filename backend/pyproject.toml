@@ -16,6 +16,7 @@ dependencies = [
   "pydantic>=2.7,<3",
   "pwdlib[argon2]>=0.2,<1",
   "python-dotenv>=1.0,<2",
+  "requests>=2.32,<3",
   "sqlalchemy>=2.0.31,<3",
   "uvicorn>=0.30,<1",
 ]
