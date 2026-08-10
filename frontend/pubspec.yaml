@@ -1,0 +1,31 @@
+name: finguard
+description: Pre-payment QR and UPI-link safety layer.
+publish_to: none
+version: 1.0.0+1
+
+environment:
+  sdk: ">=3.10.0 <4.0.0"
+
+dependencies:
+  cupertino_icons: ^1.0.8
+  flutter:
+    sdk: flutter
+  flutter_secure_storage: ^10.3.1
+  google_sign_in: ^7.2.0
+  google_sign_in_web: ^1.1.3
+  http: ^1.6.0
+  image: ^4.5.4
+  image_picker: ^1.2.3
+  mobile_scanner: ^7.4.0
+  share_plus: ^13.3.0
+  shared_preferences: ^2.5.5
+  url_launcher: ^6.3.2
+  zxing2: ^0.2.4
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true
