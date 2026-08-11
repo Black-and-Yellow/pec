@@ -29,11 +29,30 @@ apt-get install --yes --no-install-recommends \
   ca-certificates \
   certbot \
   curl \
+  iptables-persistent \
   nginx \
   python3 \
   python3-pip \
   python3-venv \
   rsync
+
+# OCI Ubuntu images ship with a final INPUT reject rule that otherwise blocks
+# Nginx even when the VCN security list allows HTTP(S). Insert only the public
+# Web ports ahead of that reject and persist the resulting IPv4 rules.
+for web_port in 80 443; do
+  if ! iptables -C INPUT -p tcp --dport "${web_port}" -j ACCEPT 2>/dev/null; then
+    reject_line="$(
+      iptables -L INPUT --line-numbers --numeric |
+        awk '$2 == "REJECT" { print $1; exit }'
+    )"
+    if [[ -n "${reject_line}" ]]; then
+      iptables -I INPUT "${reject_line}" -p tcp --dport "${web_port}" -j ACCEPT
+    else
+      iptables -A INPUT -p tcp --dport "${web_port}" -j ACCEPT
+    fi
+  fi
+done
+netfilter-persistent save >/dev/null
 
 if ! getent group "${SERVICE_GROUP}" >/dev/null; then
   groupadd --system "${SERVICE_GROUP}"

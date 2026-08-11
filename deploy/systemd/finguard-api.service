@@ -15,7 +15,7 @@ WorkingDirectory=/opt/finguard/backend
 EnvironmentFile=/etc/finguard/finguard.env
 Environment=PYTHONUNBUFFERED=1
 Environment=PYTHONDONTWRITEBYTECODE=1
-ExecStart=/opt/finguard/backend/.venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8000 --workers 1 --proxy-headers --forwarded-allow-ips=127.0.0.1 --limit-concurrency 32 --backlog 128 --timeout-keep-alive 5 --no-access-log --no-server-header
+ExecStart=/opt/finguard/backend/.venv/bin/python -m uvicorn app.main:app --host 127.0.0.1 --port 8000 --workers 1 --proxy-headers --forwarded-allow-ips=127.0.0.1 --limit-concurrency 32 --backlog 128 --timeout-keep-alive 5 --no-access-log --no-server-header
 Restart=on-failure
 RestartSec=10s
 TimeoutStartSec=45s
