@@ -1,0 +1,214 @@
+import 'package:finguard/models/payment.dart';
+import 'package:finguard/models/risk.dart';
+import 'package:finguard/screens/risk_result_screen.dart';
+import 'package:finguard/services/app_services.dart';
+import 'package:finguard/services/demo_repository.dart';
+import 'package:finguard/services/local_store.dart';
+import 'package:finguard/theme/app_theme.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
+
+import 'support/fakes.dart';
+
+void main() {
+  testWidgets('safe result explains the empty signal set before handoff', (
+    WidgetTester tester,
+  ) async {
+    final FakeExternalActions actions = FakeExternalActions();
+    final AppServices services = AppServices(
+      api: FakeApi(),
+      store: MemoryLocalStore(),
+      externalActions: actions,
+      demos: const DemoRepository(),
+    );
+    const Payment payment = Payment(
+      upiUri: 'upi://pay?pa=coffee.corner%40okaxis&pn=Coffee%20Corner&am=180&cu=INR',
+      payeeVpa: 'coffee.corner@okaxis',
+      payeeName: 'Coffee Corner',
+      amount: 180,
+      currency: 'INR',
+    );
+    const RiskAssessment assessment = RiskAssessment(
+      score: 0,
+      level: RiskLevel.safe,
+      signals: <RiskSignal>[],
+      recommendedAction: 'Review the details before continuing.',
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.light,
+        home: RiskResultScreen(
+          services: services,
+          payment: payment,
+          assessment: assessment,
+        ),
+      ),
+    );
+
+    expect(find.text('SAFE'), findsOneWidget);
+    expect(find.byKey(const Key('risk_score')), findsOneWidget);
+    expect(find.text('0'), findsOneWidget);
+    expect(find.text('No strong warning signal found'), findsOneWidget);
+    expect(
+      find.text(
+        'The deterministic policy found no risk-raising signals in this request.',
+      ),
+      findsOneWidget,
+    );
+
+    await tester.scrollUntilVisible(
+      find.byKey(const Key('continue_upi_button')),
+      250,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.tap(find.byKey(const Key('continue_upi_button')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Open this request in a UPI app?'), findsOneWidget);
+    expect(actions.upiOpenCount, 0);
+    await tester.tap(find.text('Open UPI app'));
+    await tester.pumpAndSettle();
+    expect(actions.upiOpenCount, 1);
+  });
+
+  testWidgets('caution result keeps warning evidence and requires confirmation', (
+    WidgetTester tester,
+  ) async {
+    final FakeExternalActions actions = FakeExternalActions();
+    final AppServices services = AppServices(
+      api: FakeApi(),
+      store: MemoryLocalStore(),
+      externalActions: actions,
+      demos: const DemoRepository(),
+    );
+    const Payment payment = Payment(
+      upiUri: 'upi://pay?pa=market.seller%40okaxis&pn=Marketplace%20Seller&am=4500&cu=INR',
+      payeeVpa: 'market.seller@okaxis',
+      payeeName: 'Marketplace Seller',
+      amount: 4500,
+      currency: 'INR',
+    );
+    const RiskAssessment assessment = RiskAssessment(
+      score: 33,
+      level: RiskLevel.caution,
+      signals: <RiskSignal>[
+        RiskSignal(
+          code: 'FIRST_TIME_PAYEE',
+          label: 'First-time recipient',
+          weight: 18,
+          evidence: 'No completed payment exists in local history',
+        ),
+        RiskSignal(
+          code: 'UNUSUAL_AMOUNT',
+          label: 'Unusual amount',
+          weight: 15,
+          evidence: 'The amount exceeds the new-recipient threshold',
+        ),
+      ],
+      recommendedAction: 'Pause and verify independently.',
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.light,
+        home: RiskResultScreen(
+          services: services,
+          payment: payment,
+          assessment: assessment,
+        ),
+      ),
+    );
+
+    expect(find.text('CAUTION'), findsOneWidget);
+    expect(find.text('33'), findsOneWidget);
+    expect(find.text('First-time recipient'), findsOneWidget);
+    expect(find.text('No completed payment exists in local history'), findsOneWidget);
+    expect(find.text('+18'), findsOneWidget);
+    expect(find.text('+15'), findsOneWidget);
+
+    await tester.scrollUntilVisible(
+      find.byKey(const Key('continue_anyway_button')),
+      250,
+      scrollable: find.byType(Scrollable).first,
+    );
+    expect(find.byKey(const Key('stop_here_button')), findsOneWidget);
+    expect(find.text('Check recipient'), findsOneWidget);
+    await tester.tap(find.byKey(const Key('continue_anyway_button')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Continue with caution?'), findsOneWidget);
+    expect(actions.upiOpenCount, 0);
+    await tester.tap(find.text('Cancel'));
+    await tester.pumpAndSettle();
+    expect(actions.upiOpenCount, 0);
+  });
+
+  testWidgets('high-risk result explains evidence and confirms handoff', (
+    WidgetTester tester,
+  ) async {
+    final FakeApi api = FakeApi();
+    final FakeExternalActions actions = FakeExternalActions();
+    final AppServices services = AppServices(
+      api: api,
+      store: MemoryLocalStore(),
+      externalActions: actions,
+      demos: const DemoRepository(),
+    );
+    const Payment payment = Payment(
+      upiUri: 'upi://pay?pa=scam@upi&pn=Fake%20Support&am=25000&cu=INR',
+      payeeVpa: 'scam@upi',
+      payeeName: 'Fake Support',
+      amount: 25000,
+      currency: 'INR',
+    );
+    const RiskAssessment assessment = RiskAssessment(
+      score: 83,
+      level: RiskLevel.highRisk,
+      signals: <RiskSignal>[
+        RiskSignal(
+          code: 'SEEDED_FRAUD_MATCH',
+          label: 'Recipient matches seeded scam indicator',
+          weight: 30,
+          evidence: 'VPA matched demo fraud indicator dataset',
+        ),
+      ],
+      recommendedAction: 'Stop and verify independently.',
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.light,
+        home: RiskResultScreen(
+          services: services,
+          payment: payment,
+          assessment: assessment,
+        ),
+      ),
+    );
+
+    expect(find.text('HIGH RISK'), findsOneWidget);
+    expect(find.text('83'), findsOneWidget);
+    expect(find.text('Fake Support'), findsOneWidget);
+    expect(
+      find.text('Recipient matches seeded scam indicator'),
+      findsOneWidget,
+    );
+    expect(find.text('+30'), findsOneWidget);
+
+    await tester.scrollUntilVisible(
+      find.byKey(const Key('continue_anyway_button')),
+      250,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.tap(find.byKey(const Key('continue_anyway_button')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Continue despite high risk?'), findsOneWidget);
+    expect(actions.upiOpenCount, 0);
+
+    await tester.tap(find.text('Cancel'));
+    await tester.pumpAndSettle();
+    expect(actions.upiOpenCount, 0);
+  });
+}

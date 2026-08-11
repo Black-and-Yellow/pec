@@ -1,0 +1,157 @@
+name: Deploy to OCI
+
+on:
+  workflow_run:
+    workflows: [CI]
+    branches: [main]
+    types: [completed]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: finguard-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Build and deploy production release
+    if: >-
+      (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main') ||
+      (github.event_name == 'workflow_run' &&
+       github.event.workflow_run.event == 'push' &&
+       github.event.workflow_run.head_branch == 'main' &&
+       github.event.workflow_run.conclusion == 'success')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    environment: production
+
+    steps:
+      - name: Check out tested revision
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Set up Python for manual deployment validation
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/pyproject.toml
+
+      - name: Validate backend for a manual deployment
+        if: github.event_name == 'workflow_dispatch'
+        working-directory: backend
+        run: |
+          python -m pip install --disable-pip-version-check --editable ".[dev]"
+          python -m pip check
+          python -m ruff check .
+          python -m pytest
+
+      - name: Build Flutter web
+        working-directory: frontend
+        run: |
+          flutter pub get
+          if [[ "${GITHUB_EVENT_NAME}" == 'workflow_dispatch' ]]; then
+            flutter analyze
+            flutter test
+          fi
+          flutter build web --release \
+            --dart-define="GOOGLE_WEB_CLIENT_ID=${{ vars.GOOGLE_WEB_CLIENT_ID }}"
+
+      - name: Package release
+        run: |
+          set -Eeuo pipefail
+          install -d release/backend release/web release/deploy
+          rsync --archive \
+            --exclude='.env' \
+            --exclude='.pytest_cache/' \
+            --exclude='.ruff_cache/' \
+            --exclude='.venv/' \
+            --exclude='__pycache__/' \
+            --exclude='*.db' \
+            --exclude='tests/' \
+            backend/ release/backend/
+          rsync --archive frontend/build/web/ release/web/
+          rsync --archive deploy/ release/deploy/
+          tar --create --gzip --file finguard-release.tgz --directory release .
+
+      - name: Configure SSH
+        env:
+          OCI_HOST: ${{ secrets.OCI_HOST }}
+          OCI_USER: ${{ secrets.OCI_USER }}
+          OCI_SSH_KEY: ${{ secrets.OCI_SSH_KEY }}
+          OCI_KNOWN_HOSTS: ${{ secrets.OCI_KNOWN_HOSTS }}
+          OCI_PORT: ${{ secrets.OCI_PORT || '22' }}
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+        run: |
+          set -Eeuo pipefail
+          [[ -n "${OCI_HOST}" ]] || { echo 'OCI_HOST is required' >&2; exit 1; }
+          [[ -n "${OCI_USER}" ]] || { echo 'OCI_USER is required' >&2; exit 1; }
+          [[ -n "${OCI_SSH_KEY}" ]] || { echo 'OCI_SSH_KEY is required' >&2; exit 1; }
+          [[ -n "${OCI_KNOWN_HOSTS}" ]] || { echo 'OCI_KNOWN_HOSTS is required' >&2; exit 1; }
+          [[ -n "${DEPLOY_PATH}" ]] || { echo 'DEPLOY_PATH is required' >&2; exit 1; }
+          [[ "${OCI_HOST}" =~ ^[A-Za-z0-9]([A-Za-z0-9.-]*[A-Za-z0-9])?$ && "${OCI_HOST}" != *..* ]] || { echo 'OCI_HOST must be a DNS name or IPv4 address' >&2; exit 1; }
+          [[ "${OCI_USER}" =~ ^[a-z_][a-z0-9_-]*$ ]] || { echo 'OCI_USER is invalid' >&2; exit 1; }
+          [[ "${OCI_PORT}" =~ ^[0-9]+$ ]] && (( OCI_PORT >= 1 && OCI_PORT <= 65535 )) || { echo 'OCI_PORT is invalid' >&2; exit 1; }
+          [[ "${DEPLOY_PATH}" =~ ^/home/${OCI_USER}/[A-Za-z0-9._-]+(/[A-Za-z0-9._-]+)*$ ]] || { echo 'DEPLOY_PATH must be a directory below the SSH user home' >&2; exit 1; }
+          [[ "/${DEPLOY_PATH}/" != *'/../'* && "/${DEPLOY_PATH}/" != *'/./'* ]] || { echo 'DEPLOY_PATH must not contain dot path components' >&2; exit 1; }
+          [[ "${DEPLOY_PATH}" != */ ]] || { echo 'DEPLOY_PATH must not end with a slash' >&2; exit 1; }
+
+          umask 077
+          install -d "${HOME}/.ssh"
+          printf '%s\n' "${OCI_SSH_KEY}" | tr -d '\r' >"${HOME}/.ssh/finguard_deploy_key"
+          chmod 0600 "${HOME}/.ssh/finguard_deploy_key"
+          ssh-keygen -y -P '' -f "${HOME}/.ssh/finguard_deploy_key" >/dev/null
+          printf '%s\n' "${OCI_KNOWN_HOSTS}" | tr -d '\r' >"${HOME}/.ssh/known_hosts"
+          chmod 0600 "${HOME}/.ssh/known_hosts"
+          ssh-keygen -l -f "${HOME}/.ssh/known_hosts" >/dev/null
+
+      - name: Upload and activate release
+        env:
+          OCI_HOST: ${{ secrets.OCI_HOST }}
+          OCI_USER: ${{ secrets.OCI_USER }}
+          OCI_PORT: ${{ secrets.OCI_PORT || '22' }}
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+        run: |
+          set -Eeuo pipefail
+          SSH_KEY="${HOME}/.ssh/finguard_deploy_key"
+          SSH_TARGET="${OCI_USER}@${OCI_HOST}"
+          SSH_OPTIONS=(
+            -p "${OCI_PORT}"
+            -i "${SSH_KEY}"
+            -o BatchMode=yes
+            -o ConnectTimeout=10
+            -o IdentitiesOnly=yes
+            -o StrictHostKeyChecking=yes
+            -o "UserKnownHostsFile=${HOME}/.ssh/known_hosts"
+          )
+          SCP_OPTIONS=(
+            -P "${OCI_PORT}"
+            -i "${SSH_KEY}"
+            -o BatchMode=yes
+            -o ConnectTimeout=10
+            -o IdentitiesOnly=yes
+            -o StrictHostKeyChecking=yes
+            -o "UserKnownHostsFile=${HOME}/.ssh/known_hosts"
+          )
+
+          ssh "${SSH_OPTIONS[@]}" "${SSH_TARGET}" \
+            "install -d -m 0700 -- '${DEPLOY_PATH}'"
+          scp "${SCP_OPTIONS[@]}" \
+            finguard-release.tgz \
+            "${SSH_TARGET}:${DEPLOY_PATH}/finguard-release.tgz"
+          ssh "${SSH_OPTIONS[@]}" "${SSH_TARGET}" \
+            "sudo --non-interactive /usr/local/sbin/finguard-deploy-release '${DEPLOY_PATH}/finguard-release.tgz'"
+
+      - name: Remove ephemeral SSH material
+        if: always()
+        run: rm -f -- "${HOME}/.ssh/finguard_deploy_key" "${HOME}/.ssh/known_hosts"

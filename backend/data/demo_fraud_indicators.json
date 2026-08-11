@@ -1,0 +1,28 @@
+[
+  {
+    "id": "demo-indicator-kyc-vpa",
+    "indicator_type": "VPA",
+    "value": "secure-kyc-update@okaxis",
+    "label": "Seeded fake KYC payment recipient",
+    "report_count": 3,
+    "relationships": {
+      "reported_phones": ["+91-DEMO-1930"],
+      "suspicious_urls": ["kyc-verification.example.invalid", "support-check.example.invalid"],
+      "qr_fingerprints": ["demo-qr-sha256-kyc-001"]
+    },
+    "source": "SEEDED_DEMO_DATA"
+  },
+  {
+    "id": "demo-indicator-refund-vpa",
+    "indicator_type": "VPA",
+    "value": "refund-desk@oksbi",
+    "label": "Seeded refund impersonation recipient",
+    "report_count": 2,
+    "relationships": {
+      "reported_phones": ["+91-DEMO-REFUND"],
+      "suspicious_urls": ["refund-help.example.invalid"],
+      "qr_fingerprints": []
+    },
+    "source": "SEEDED_DEMO_DATA"
+  }
+]

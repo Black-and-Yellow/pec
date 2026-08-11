@@ -1,0 +1,52 @@
+[
+  {
+    "id": "demo-history-coffee-001",
+    "device_id": "demo-device",
+    "vpa": "coffee.corner@okaxis",
+    "payee_name": "Coffee Corner",
+    "amount": "160.00",
+    "currency": "INR",
+    "transaction_note": "Coffee",
+    "completed_at": "2026-07-18T09:15:00Z"
+  },
+  {
+    "id": "demo-history-coffee-002",
+    "device_id": "demo-device",
+    "vpa": "coffee.corner@okaxis",
+    "payee_name": "Coffee Corner",
+    "amount": "180.00",
+    "currency": "INR",
+    "transaction_note": "Coffee",
+    "completed_at": "2026-07-22T10:05:00Z"
+  },
+  {
+    "id": "demo-history-grocer-001",
+    "device_id": "demo-device",
+    "vpa": "fresh.grocer@okhdfcbank",
+    "payee_name": "Fresh Grocer",
+    "amount": "620.00",
+    "currency": "INR",
+    "transaction_note": "Groceries",
+    "completed_at": "2026-07-25T18:42:00Z"
+  },
+  {
+    "id": "demo-history-auto-001",
+    "device_id": "demo-device",
+    "vpa": "city.auto@okicici",
+    "payee_name": "City Auto",
+    "amount": "240.00",
+    "currency": "INR",
+    "transaction_note": "Ride",
+    "completed_at": "2026-07-28T12:20:00Z"
+  },
+  {
+    "id": "demo-history-utility-001",
+    "device_id": "demo-device",
+    "vpa": "utility.board@oksbi",
+    "payee_name": "Utility Board",
+    "amount": "980.00",
+    "currency": "INR",
+    "transaction_note": "Electricity bill",
+    "completed_at": "2026-08-01T17:30:00Z"
+  }
+]
