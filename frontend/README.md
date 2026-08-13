@@ -71,6 +71,12 @@ flutter build apk --release `
 
 Release-producing Gradle graphs, including aggregate `assemble`, fail before execution unless the HTTPS API origin and all four signing values are present. For compile evidence only, CI and `scripts/verify.ps1` explicitly set `FINGUARD_ALLOW_DEMO_RELEASE=true`; that debug-signed artifact is non-distributable. Never commit the keystore or passwords. These signing values are not service API keys.
 
+For local Android runtime checks, use an existing AVD and demo data only. If
+`emulator -list-avds` is empty even though an AVD exists under the user profile,
+set `ANDROID_AVD_HOME="$env:USERPROFILE\.android\avd"` for that process before
+launching it. Installing the explicit demo-release APK is smoke-test evidence;
+it does not make the debug certificate suitable for distribution.
+
 ## API assumptions
 
 - `POST /api/v1/payments/parse` with `{"upi_uri":"upi://pay?..."}` returns payment fields under `payment` plus a server-built `canonical_uri`. Only that canonical URI is retained for handoff.

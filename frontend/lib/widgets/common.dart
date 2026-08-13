@@ -161,6 +161,55 @@ class WorkspaceAction extends StatelessWidget {
   );
 }
 
+class AsyncFilledButton extends StatelessWidget {
+  const AsyncFilledButton({
+    required this.buttonKey,
+    required this.loading,
+    required this.onPressed,
+    required this.icon,
+    required this.label,
+    required this.loadingLabel,
+    super.key,
+    this.loadingSemanticsLabel,
+  });
+
+  final Key buttonKey;
+  final bool loading;
+  final VoidCallback? onPressed;
+  final IconData icon;
+  final String label;
+  final String loadingLabel;
+  final String? loadingSemanticsLabel;
+
+  @override
+  Widget build(BuildContext context) => Semantics(
+    container: loading,
+    liveRegion: loading,
+    label: loading ? loadingSemanticsLabel ?? loadingLabel : null,
+    child: ExcludeSemantics(
+      excluding: loading,
+      child: SizedBox(
+        width: double.infinity,
+        child: FilledButton.icon(
+          key: buttonKey,
+          onPressed: loading ? null : onPressed,
+          icon: loading
+              ? const SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: Colors.white,
+                  ),
+                )
+              : Icon(icon),
+          label: Text(loading ? loadingLabel : label),
+        ),
+      ),
+    ),
+  );
+}
+
 class RiskBadge extends StatelessWidget {
   const RiskBadge({required this.level, super.key});
 
@@ -199,11 +248,14 @@ class RiskBadge extends StatelessWidget {
           children: <Widget>[
             Icon(icon, color: foreground, size: 19),
             const SizedBox(width: 7),
-            Text(
-              level.label,
-              style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                color: foreground,
-                letterSpacing: 0.5,
+            Flexible(
+              child: Text(
+                level.label,
+                softWrap: true,
+                style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                  color: foreground,
+                  letterSpacing: 0.5,
+                ),
               ),
             ),
           ],

@@ -121,33 +121,14 @@ class _PasteScreenState extends State<PasteScreen> {
             ),
           ],
           const SizedBox(height: 22),
-          Semantics(
-            container: _loading,
-            liveRegion: _loading,
-            label: _loading ? 'Checking request' : null,
-            child: ExcludeSemantics(
-              excluding: _loading,
-              child: SizedBox(
-                width: double.infinity,
-                child: FilledButton.icon(
-                  key: const Key('analyze_payment_button'),
-                  onPressed: _loading ? null : _analyze,
-                  icon: _loading
-                      ? const SizedBox(
-                          width: 20,
-                          height: 20,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: Colors.white,
-                          ),
-                        )
-                      : const Icon(Icons.policy_outlined),
-                  label: Text(
-                    _loading ? 'Checking request…' : 'Analyze payment',
-                  ),
-                ),
-              ),
-            ),
+          AsyncFilledButton(
+            buttonKey: const Key('analyze_payment_button'),
+            loading: _loading,
+            onPressed: _analyze,
+            icon: Icons.policy_outlined,
+            label: 'Analyze payment',
+            loadingLabel: 'Checking request…',
+            loadingSemanticsLabel: 'Checking request',
           ),
           const SizedBox(height: 16),
           const PrivacyNote(

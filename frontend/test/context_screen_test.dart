@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:finguard/screens/context_screen.dart';
 import 'package:finguard/screens/paste_screen.dart';
 import 'package:finguard/services/api_service.dart';
@@ -11,6 +13,56 @@ import 'package:flutter_test/flutter_test.dart';
 import 'support/fakes.dart';
 
 void main() {
+  testWidgets('message analysis announces loading and completion', (
+    WidgetTester tester,
+  ) async {
+    final Completer<void> gate = Completer<void>();
+    final AppServices services = AppServices(
+      api: FakeApi(analyzeContextGate: gate.future),
+      store: MemoryLocalStore(),
+      externalActions: FakeExternalActions(),
+      demos: const DemoRepository(),
+    );
+    final SemanticsHandle semantics = tester.ensureSemantics();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.light,
+        home: ContextScreen(services: services),
+      ),
+    );
+    await tester.enterText(
+      find.byKey(const Key('suspicious_message_field')),
+      'Urgent support request',
+    );
+    await tester.scrollUntilVisible(
+      find.byKey(const Key('analyze_message_button')),
+      250,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.tap(find.byKey(const Key('analyze_message_button')));
+    await tester.pump();
+
+    final Semantics loading = tester.widget<Semantics>(
+      find
+          .ancestor(
+            of: find.byKey(const Key('analyze_message_button')),
+            matching: find.byType(Semantics),
+          )
+          .first,
+    );
+    expect(loading.properties.label, 'Analyzing message');
+    expect(loading.properties.liveRegion, isTrue);
+    gate.complete();
+    await tester.pumpAndSettle();
+    final Semantics result = tester.widget<Semantics>(
+      find.byKey(const Key('context_analysis_result')),
+    );
+    expect(result.properties.label, 'Message analysis complete');
+    expect(result.properties.liveRegion, isTrue);
+    semantics.dispose();
+  });
+
   testWidgets('local fallback remains usable when Gemini is unavailable', (
     WidgetTester tester,
   ) async {

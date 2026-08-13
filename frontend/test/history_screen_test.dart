@@ -12,6 +12,56 @@ import 'package:flutter_test/flutter_test.dart';
 import 'support/fakes.dart';
 
 void main() {
+  testWidgets('history rows remain usable at narrow width and large text', (
+    WidgetTester tester,
+  ) async {
+    tester.view.physicalSize = const Size(320, 700);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final MemoryLocalStore store = MemoryLocalStore();
+    await store.addHistory(
+      HistoryEntry(
+        id: 'large-text-history',
+        checkedAt: DateTime.utc(2026, 8, 12),
+        payment: const Payment(
+          upiUri: 'upi://pay?pa=merchant%40upi&pn=Merchant&am=75&cu=INR',
+          payeeVpa: 'merchant@upi',
+          payeeName: 'A deliberately long merchant recipient name',
+          amount: 75,
+          currency: 'INR',
+        ),
+        assessment: const RiskAssessment(
+          score: 70,
+          level: RiskLevel.highRisk,
+          signals: <RiskSignal>[],
+          recommendedAction: 'Stop here.',
+        ),
+      ),
+    );
+    final AppServices services = AppServices(
+      api: FakeApi(),
+      store: store,
+      externalActions: FakeExternalActions(),
+      demos: const DemoRepository(),
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.light,
+        home: MediaQuery(
+          data: const MediaQueryData(textScaler: TextScaler.linear(2)),
+          child: HistoryScreen(services: services),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(tester.takeException(), isNull);
+    expect(find.text('70/100'), findsOneWidget);
+    expect(find.text('HIGH RISK'), findsOneWidget);
+  });
+
   testWidgets('a result reopened from history cannot hand off to UPI', (
     WidgetTester tester,
   ) async {

@@ -292,4 +292,58 @@ void main() {
     expect(store.refreshToken, isNull);
     expect(find.byType(WelcomeScreen), findsOneWidget);
   });
+
+  testWidgets('account deletion stays open until confirmation is valid', (
+    WidgetTester tester,
+  ) async {
+    final FakeAuthApi api = FakeAuthApi();
+    final MemoryAuthStore store = MemoryAuthStore()
+      ..refreshToken = 'existing-refresh-token-value-that-is-long-enough';
+    await tester.pumpWidget(
+      FinGuardApp(
+        services: _services(api: api, store: store),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Account and privacy'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('delete_account_button')));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(
+      find.byKey(const Key('delete_confirmation_field')),
+      'DELETE?',
+    );
+    await tester.tap(find.byKey(const Key('confirm_delete_account_button')));
+    await tester.pump();
+    expect(find.text('Type DELETE exactly to continue.'), findsOneWidget);
+    expect(
+      tester
+          .widget<FilledButton>(
+            find.byKey(const Key('confirm_delete_account_button')),
+          )
+          .onPressed,
+      isNotNull,
+    );
+    expect(find.text('Delete your account?'), findsOneWidget);
+
+    await tester.enterText(
+      find.byKey(const Key('delete_confirmation_field')),
+      'DELETE',
+    );
+    await tester.enterText(
+      find.byKey(const Key('delete_password_field')),
+      'safe-password-42',
+    );
+    await tester.pump();
+    expect(
+      tester
+          .widget<FilledButton>(
+            find.byKey(const Key('confirm_delete_account_button')),
+          )
+          .onPressed,
+      isNotNull,
+    );
+    expect(api.deleteCount, 0);
+  });
 }

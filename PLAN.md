@@ -2,7 +2,7 @@
 
 Status: **completed locally**
 Branch: `codex/overnight-finguard-hardening`
-Updated: 2026-08-13
+Updated: 2026-08-14
 
 ## Verified current state
 
@@ -12,7 +12,7 @@ Updated: 2026-08-13
 - Architecture is a FastAPI/SQLAlchemy/SQLite modular monolith plus one Flutter Android/Web client. Backend `risk_policy.py` and `RiskEngine` are the deterministic authority; Gemini is an optional strict context adapter.
 - Public trust boundaries include UPI parsing, anonymous device history/assessment IDs, authentication/OAuth/session tokens, screenshot/context upload, Gemini output, external UPI/browser/share actions, and deployment archives/configuration.
 - SQLite plus one Uvicorn worker is intentional for the single-node OCI target. Multi-node traffic requires versioned shared-database migration; no cosmetic database migration is planned.
-- Local Flutter 3.44.9/Dart 3.12.2 and Android SDK assets exist under `.tools`; `adb devices -l` found no running emulator.
+- Local Flutter 3.44.9/Dart 3.12.2 and Android SDK assets exist under `.tools`. The initially hidden `FinGuard_Test` API 35 AVD was recovered with the correct process-local AVD home and completed a headless local smoke run.
 - CI defines backend lint/tests, Flutter analysis/tests/Web/APK builds, deployment syntax checks, and a limited tracked-secret pattern scan.
 - Codex Security standard-scan preflight returned `ready`; three worker slots are available versus its preferred six.
 
@@ -49,6 +49,9 @@ Updated: 2026-08-13
 | Live Uvicorn HTTP integration | Exit 0 in full suite: actual loopback Uvicorn covers health, strict parse/error envelope, SAFE/CAUTION/HIGH, and concurrent refresh |
 | Playwright Web flows/visual QA | Exit 0: `npm run test:e2e` passed 9/9 tests in 46.1s against loopback Uvicorn and a release Web build compiled with `API_BASE_URL=http://127.0.0.1:8000`; SAFE/CAUTION/HIGH, view-only demo/history, 375/768/1440 px, empty/malformed, loading/503, offline, keyboard/focus, console, page-error, and failed-request gates passed. Eight screenshots are under `tmp/visual-qa/`. |
 | Focused professional home workspace refresh | Exit 0: `dart format` completed; `flutter analyze --no-pub` reported no issues in 3.2s; `flutter test --no-pub test/home_screen_test.dart` passed 2/2 in 1s; scoped `git diff --check` passed. Dark product chrome, compact bordered action/demo rows, existing keys/labels, disabled demo handoff, and the explicit pre-handoff boundary are preserved without changing scoring or navigation behavior. |
+| Secondary-surface accessibility and adaptive UI (`dart format`; `flutter analyze --no-pub`; `flutter test --no-pub test/context_screen_test.dart test/auth_flow_test.dart test/history_screen_test.dart test/paste_screen_test.dart`) | Exit 0 after focused corrections: direct Dart format completed; final analysis reported no issues in 3.4s; the four focused files passed 17/17 in 7s. Message/payment async actions now share stable live-region semantics; inserted context results announce completion; destructive account deletion remains scrollable and open with inline validation until exact confirmation; history uses compact workspace rows; and `RiskBadge` wraps safely at 320px with 2× text. The first focused run exposed four presentation regressions (semantic-label compatibility, inherited semantics counting, stale dialog validation state, and a 79px large-text badge overflow); each root cause was corrected before the final green rerun. |
+| Headless Android emulator smoke (`emulator.exe -avd FinGuard_Test -no-window ...`; `adb wait-for-device`; `adb install -r app-release.apk`; launcher/guest/scanner UIAutomator checks) | Exit 0: the existing Pixel 6 / Android 15 API 35 x86_64 AVD booted with WHPX, `sys.boot_completed=1`, and appeared as `emulator-5554`. The 71,999,674-byte explicit demo-release APK installed successfully; `org.pec.finguard.MainActivity` launched and remained focused; guest entry reached the home workspace; scanner navigation exposed camera, image, and paste fallbacks. Visual evidence is under `tmp/android-qa/welcome.png`, `home.png`, and `scanner.png`. No QR payload, account credential, real payment data, UPI handoff, or external service was used. The APK remains Android-debug signed and non-distributable. |
+| Secondary UI independent read-only review | No P0 or defensible P1 blocker: async semantics, context completion, adaptive deletion validation, large-text rows/badges, saved/demo handoff locks, and all external-action confirmations remain correct; Android claims are limited to the executed local smoke. |
 | Initial `npm run test:e2e` | **resolved:** Playwright 1.62.1's bundled executable path targeted missing Chromium revision 1234 while the recorded cache contained revision 1228. The local harness selects installed Chrome outside CI (Chrome 151.0.7922.109), avoiding dependence on the stale cache without downloading a browser. Focused `npx playwright test --grep safe` passed 1/1 in 11.8s before the full suite. |
 | Release anti-replay contract (`bash -n deploy/scripts/release-metadata.sh deploy/scripts/test-release-metadata.sh deploy/scripts/deploy-release.sh deploy/scripts/setup-oci.sh`; `bash deploy/scripts/test-release-metadata.sh`, Git Bash) | Exit 0: strict record/schema comparisons, equal replay and forward downgrade rejection, explicit rollback only, monotonic high-water behavior, extracted tar metadata layout, and production workflow/static boundaries passed. The Windows harness uses an explicit non-root, Git-Bash-only, marked-temp-root file-metadata bypass because NTFS/MSYS cannot represent mode `0600`; Ubuntu CI runs the same contract without the bypass and therefore exercises real owner/mode enforcement. |
 | Deployment workflow parse/action-pin and scoped diff checks | Exit 0: `.github/workflows/ci.yml` and `deploy.yml` parsed with PyYAML; every `uses:` reference was pinned to a 40-hex commit; `git diff --check` passed for the release milestone files. |
@@ -84,12 +87,13 @@ Updated: 2026-08-13
 - **completed:** focused branch coverage is enforced at 90%; final backend evidence reached 93.76%, and mypy checks all 36 application files.
 - **completed:** dependency consistency/audit and tracked working-tree secret checks use local, unpaid tooling.
 - **completed:** repeatable Flutter Web Playwright flows cover 375/768/1440, console/failed-request diagnostics, keyboard/focus, and loading/empty/offline/malformed/server-error states.
-- **completed with conditional blocker:** Web and non-distributable APK release builds pass; Android runtime awaits an emulator/device.
+- **completed locally:** Web and non-distributable APK builds pass, and the existing API 35 emulator completed a launch/guest/scanner smoke. Store distribution remains blocked on operator-controlled signing credentials.
 - **completed:** SQLite schema-evolution boundaries and production signing/release requirements are documented.
 
 ### P2 optional improvements
 
 - **completed:** one bounded professional home/workspace refinement uses restrained dark product chrome, reusable action rows, compact demo rows, and tighter utility copy without changing safety behavior.
+- **completed:** secondary account, context, paste, and history surfaces now share accessible async state, adaptive destructive confirmation, and large-text-safe operational rows without changing APIs, scoring, or external-action confirmations.
 - Defer email verification/password recovery until a provider is deliberately selected; do not introduce a paid or fake integration.
 
 ## Milestones and acceptance criteria
@@ -99,7 +103,7 @@ Updated: 2026-08-13
 | M0 Inspection/setup | completed | Baselines recorded; durable Codex config/skill validates; secret example sanitized; verifier uses an isolated backend environment | skill `quick_validate.py`; `scripts/verify.ps1 -BackendOnly` |
 | M1 Backend P0 | completed | Parser, scoring, API, auth/session, retention and error envelopes pass unit + live HTTP tests; signed context integrity current | `scripts/verify.ps1 -BackendOnly`; focused live integration command |
 | M2 Web/Flutter P1 | completed | Analyze/tests/Web build pass; required flows and widths have browser evidence with clean console/network diagnostics | `scripts/verify.ps1 -FrontendOnly -SkipAndroid`; Playwright suite (9/9 passed; eight screenshots in `tmp/visual-qa/`) |
-| M3 Android/release | completed with blockers | APK builds; signing and DB evolution boundaries documented; emulator and production signing honestly blocked | `scripts/verify.ps1`; deployment contracts; `apksigner verify` |
+| M3 Android/release | completed with external signing blocker | APK builds and launches on the local API 35 emulator; signing and DB evolution boundaries documented; production signing remains operator-owned | `scripts/verify.ps1`; emulator smoke; deployment contracts; `apksigner verify` |
 | M4 Independent review | completed | All P0 and defensible P1 findings were resolved; broad and focused verification passed; local checkpoint commit created without push/deploy | review diff/status; recorded verifier and focused contracts |
 
 ## Decisions and assumptions
@@ -113,13 +117,12 @@ Updated: 2026-08-13
 - An ordinary HTTPS configuration refresh uses `https-config.sh --refresh-existing`: it makes no Certbot/network call, recovers exactly one lowercase domain from the active non-symlink site, requires canonical matching Let's Encrypt certificate directives/files, renders only the reviewed template, and preserves the old site until validation and reload succeed. Setup invokes the same helper when it detects an already-enabled TLS site; malformed or ambiguous TLS identity fails closed rather than reverting to plaintext bootstrap behavior.
 - The deploy identity uses `/usr/local/libexec/finguard-deploy-transport` as both its configured shell and its `authorized_keys` forced command. Its sole key record begins with OpenSSH `restrict`, the home/key boundary is root-controlled, and only the staging directory is transport-writable. The dispatcher accepts only `finguard-deploy-activate-stream`, locks the staging directory inode before cleanup/receive, bounds and validates an isolated two-entry container, and invokes the existing exact two-argument sudo runner only after both fixed files are placed. Direct trusted local-root rollback remains outside this SSH identity.
 - Browser and Android gates use local/demo data. No real UPI payment, report submission, contact message, paid AI request, push, merge, or deployment is authorized.
-- Missing emulator or signing credentials blocks only the corresponding runtime/release-distribution evidence, not unrelated safe work.
+- Missing production signing credentials block only store-distribution evidence; the local emulator/runtime boundary is now verified with the explicit non-distributable demo build.
 - A machine-wide Python installation is not a valid dependency-consistency boundary. Backend dependency verification will run in the ignored `backend/.venv`; global package conflicts are recorded as harness noise, not FinGuard defects.
 - A locally buildable APK signed with Android's debug certificate is compile evidence only, never production-release evidence. Production signing and an HTTPS API definition must fail closed or be supplied deliberately.
 
 ## Blocked and deferred
 
 - **blocked external:** revoke/rotate the exposed provider credentials without reproducing them in tickets or logs.
-- **blocked conditional:** Android runtime integration until an emulator/device is available.
 - **blocked external:** production Android signing requires an operator-controlled private keystore and credentials; none will be generated or stored by this task.
 - **deferred:** PostgreSQL/shared persistence until the application moves beyond its documented single-node boundary.

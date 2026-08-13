@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../models/history_entry.dart';
+import '../models/risk.dart';
 import '../services/app_services.dart';
 import '../theme/app_theme.dart';
 import '../widgets/common.dart';
@@ -29,7 +30,11 @@ class _HistoryScreenState extends State<HistoryScreen> {
     appBar: AppBar(
       title: const Text('Check history'),
       actions: <Widget>[
-        TextButton(onPressed: _clear, child: const Text('Clear')),
+        IconButton(
+          onPressed: _clear,
+          tooltip: 'Clear local history',
+          icon: const Icon(Icons.delete_sweep_outlined),
+        ),
         const SizedBox(width: 8),
       ],
     ),
@@ -137,44 +142,60 @@ class _HistoryRow extends StatelessWidget {
   final VoidCallback onTap;
 
   @override
-  Widget build(BuildContext context) => Card(
-    child: InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(16),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Row(
-          children: <Widget>[
-            RiskBadge(level: entry.assessment.level),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: <Widget>[
-                  Text(
-                    entry.payment.recipientLabel,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.titleMedium,
-                  ),
-                  const SizedBox(height: 3),
-                  Text(
-                    '${entry.payment.formattedAmount} · ${_formatDate(entry.checkedAt)}${entry.isDemo ? ' · Demo' : ''}',
-                    style: Theme.of(
-                      context,
-                    ).textTheme.bodySmall?.copyWith(color: AppColors.inkMuted),
-                  ),
-                ],
-              ),
+  Widget build(BuildContext context) => Semantics(
+    button: true,
+    label:
+        '${entry.payment.recipientLabel}, ${entry.assessment.level.label}, ${entry.assessment.score} out of 100',
+    child: WorkspacePanel(
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(8),
+          hoverColor: AppColors.surfaceMuted,
+          focusColor: AppColors.tealSoft,
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Row(
+                  children: <Widget>[
+                    Expanded(
+                      child: Text(
+                        entry.payment.recipientLabel,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.titleMedium,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    const Icon(Icons.chevron_right, color: AppColors.inkMuted),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  '${entry.payment.formattedAmount} · ${_formatDate(entry.checkedAt)}${entry.isDemo ? ' · Demo' : ''}',
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodySmall?.copyWith(color: AppColors.inkMuted),
+                ),
+                const SizedBox(height: 12),
+                Wrap(
+                  spacing: 12,
+                  runSpacing: 10,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: <Widget>[
+                    RiskBadge(level: entry.assessment.level),
+                    Text(
+                      '${entry.assessment.score}/100',
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                  ],
+                ),
+              ],
             ),
-            const SizedBox(width: 8),
-            Text(
-              '${entry.assessment.score}/100',
-              style: Theme.of(context).textTheme.titleMedium,
-            ),
-            const SizedBox(width: 4),
-            const Icon(Icons.chevron_right),
-          ],
+          ),
         ),
       ),
     ),

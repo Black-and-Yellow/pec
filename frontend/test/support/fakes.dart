@@ -14,11 +14,13 @@ final class FakeApi implements FinGuardApi {
   FakeApi({
     this.contextAvailable = true,
     this.contextError,
+    this.analyzeContextGate,
     this.parsePaymentGate,
   });
 
   final bool contextAvailable;
   final ApiException? contextError;
+  final Future<void>? analyzeContextGate;
   final Future<void>? parsePaymentGate;
   ContextAnalysis? lastScoreContext;
 
@@ -29,6 +31,7 @@ final class FakeApi implements FinGuardApi {
     Uint8List? screenshotBytes,
     String? screenshotMimeType,
   }) async {
+    await analyzeContextGate;
     final ApiException? error = contextError;
     if (error != null) {
       throw error;

@@ -136,49 +136,77 @@ class _AccountScreenState extends State<AccountScreen> {
   Future<void> _confirmDelete() async {
     String confirmationInput = '';
     String passwordInput = '';
+    bool attempted = false;
     final bool needsPassword = _auth.user?.authProvider == 'password';
     final bool? confirmed = await showDialog<bool>(
       context: context,
-      builder: (BuildContext dialogContext) => AlertDialog(
-        title: const Text('Delete your account?'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: <Widget>[
-            const Text(
-              'This permanently removes your FinGuard identity and active sessions. Local payment history can still be cleared separately on this device.',
+      builder: (BuildContext dialogContext) => StatefulBuilder(
+        builder: (BuildContext context, StateSetter setDialogState) {
+          final bool phraseValid = confirmationInput.trim() == 'DELETE';
+          final bool passwordValid = !needsPassword || passwordInput.isNotEmpty;
+          return AlertDialog(
+            scrollable: true,
+            title: const Text('Delete your account?'),
+            content: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: <Widget>[
+                const Text(
+                  'This permanently removes your FinGuard identity and active sessions. Local payment history can still be cleared separately on this device.',
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  key: const Key('delete_confirmation_field'),
+                  onChanged: (String value) =>
+                      setDialogState(() => confirmationInput = value),
+                  decoration: InputDecoration(
+                    labelText: 'Type DELETE',
+                    errorText:
+                        (attempted || confirmationInput.isNotEmpty) &&
+                            !phraseValid
+                        ? 'Type DELETE exactly to continue.'
+                        : null,
+                  ),
+                ),
+                if (needsPassword) ...<Widget>[
+                  const SizedBox(height: 12),
+                  TextField(
+                    key: const Key('delete_password_field'),
+                    onChanged: (String value) =>
+                        setDialogState(() => passwordInput = value),
+                    obscureText: true,
+                    decoration: InputDecoration(
+                      labelText: 'Password',
+                      errorText: attempted && !passwordValid
+                          ? 'Enter your password to continue.'
+                          : null,
+                    ),
+                  ),
+                ],
+              ],
             ),
-            const SizedBox(height: 16),
-            TextField(
-              key: const Key('delete_confirmation_field'),
-              onChanged: (String value) => confirmationInput = value,
-              decoration: const InputDecoration(labelText: 'Type DELETE'),
-            ),
-            if (needsPassword) ...<Widget>[
-              const SizedBox(height: 12),
-              TextField(
-                key: const Key('delete_password_field'),
-                onChanged: (String value) => passwordInput = value,
-                obscureText: true,
-                decoration: const InputDecoration(labelText: 'Password'),
+            actions: <Widget>[
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(false),
+                child: const Text('Keep account'),
+              ),
+              FilledButton(
+                key: const Key('confirm_delete_account_button'),
+                style: FilledButton.styleFrom(
+                  backgroundColor: AppColors.danger,
+                ),
+                onPressed: () {
+                  if (confirmationInput.trim() == 'DELETE' &&
+                      (!needsPassword || passwordInput.isNotEmpty)) {
+                    Navigator.of(dialogContext).pop(true);
+                    return;
+                  }
+                  setDialogState(() => attempted = true);
+                },
+                child: const Text('Delete permanently'),
               ),
             ],
-          ],
-        ),
-        actions: <Widget>[
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(false),
-            child: const Text('Keep account'),
-          ),
-          FilledButton(
-            key: const Key('confirm_delete_account_button'),
-            onPressed: () => Navigator.of(dialogContext).pop(
-              confirmationInput.trim() == 'DELETE' &&
-                  (!needsPassword || passwordInput.isNotEmpty),
-            ),
-            child: const Text('Delete permanently'),
-          ),
-        ],
+          );
+        },
       ),
     );
     if (confirmed != true) {

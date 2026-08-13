@@ -145,23 +145,14 @@ class _ContextScreenState extends State<ContextScreen> {
             ErrorNotice(message: _error!, onRetry: _analyze),
           ],
           const SizedBox(height: 20),
-          SizedBox(
-            width: double.infinity,
-            child: FilledButton.icon(
-              key: const Key('analyze_message_button'),
-              onPressed: _loading ? null : _analyze,
-              icon: _loading
-                  ? const SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(
-                        color: Colors.white,
-                        strokeWidth: 2,
-                      ),
-                    )
-                  : const Icon(Icons.manage_search),
-              label: Text(_loading ? 'Analyzing…' : 'Analyze message'),
-            ),
+          AsyncFilledButton(
+            buttonKey: const Key('analyze_message_button'),
+            loading: _loading,
+            onPressed: _analyze,
+            icon: Icons.manage_search,
+            label: 'Analyze message',
+            loadingLabel: 'Analyzing message…',
+            loadingSemanticsLabel: 'Analyzing message',
           ),
           if (_analysis != null) ...<Widget>[
             const SizedBox(height: 28),
@@ -324,8 +315,14 @@ class _AnalysisResult extends StatelessWidget {
     final bool usedGemini = analysis.source == ContextAnalysisSource.gemini;
     final bool usedLocalRules =
         analysis.source == ContextAnalysisSource.localRules;
-    return Card(
-      child: Padding(
+    return Semantics(
+      key: const Key('context_analysis_result'),
+      container: true,
+      liveRegion: true,
+      label: hasValidatedContext
+          ? 'Message analysis complete'
+          : 'Message analysis unavailable',
+      child: WorkspacePanel(
         padding: const EdgeInsets.all(20),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
