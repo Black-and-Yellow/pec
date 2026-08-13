@@ -23,6 +23,7 @@ final class FakeApi implements FinGuardApi {
   final Future<void>? analyzeContextGate;
   final Future<void>? parsePaymentGate;
   ContextAnalysis? lastScoreContext;
+  int prepareResponseCount = 0;
 
   @override
   Future<ContextAnalysis> analyzeContext({
@@ -70,7 +71,10 @@ final class FakeApi implements FinGuardApi {
     required RiskAssessment assessment,
     required bool alreadyPaid,
     ContextAnalysis? context,
-  }) async => 'Prepared report for ${payment.payeeVpa}';
+  }) async {
+    prepareResponseCount += 1;
+    return 'Prepared report for ${payment.payeeVpa}';
+  }
 
   @override
   Future<RiskScoreResult> scorePayment({

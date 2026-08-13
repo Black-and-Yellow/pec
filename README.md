@@ -20,6 +20,8 @@ SCAN OR PASTE -> SCORE EXPLAINABLY -> RESPOND WITH USER CONFIRMATION
 - A deterministic 0-100 risk engine with centralized weights and thresholds.
 - Visible evidence for every score contribution.
 - SAFE, CAUTION, and HIGH RISK paths with deliberate confirmation before risky handoff.
+- An offline Risk Lab for comparing the three deterministic judge cases without API, AI, or payment-app access.
+- A three-step independent-verification checklist before any live CAUTION or HIGH RISK handoff can continue.
 - Protective actions, an "already paid" recovery flow, incident draft copy, the official Indian cybercrime route, and native trusted-contact sharing.
 - Optional Gemini text/image context extraction with explicit consent, strict structured output, and local-rule fallback.
 - Anonymous local check history and clearly labelled seeded demo history/reputation data.
@@ -210,7 +212,7 @@ Every scoring transaction deletes expired `ASSESSED` records and prunes the olde
 | Marketplace seller, first-time payee, INR 4,500 | First-time recipient + unusual amount | `CAUTION 33/100` |
 | Fake KYC request, seeded VPA, INR 25,000 | Seed match + relationships + amount + KYC/urgency | `HIGH RISK 99/100` |
 
-The Flutter client includes matching bundled fixtures so the three judge cases remain usable if the network or Gemini is unavailable. Seeded data is always labelled as demo data and is never presented as live bank, NPCI, or national fraud intelligence.
+The Flutter client includes matching bundled fixtures so the three judge cases remain usable if the network or Gemini is unavailable. Its Risk Lab compares their payment facts, scores, and evidence, then opens only a view-only demo result with payment, report, share, and already-paid actions suppressed. Seeded data is always labelled as demo data and is never presented as live bank, NPCI, or national fraud intelligence.
 
 ## Verification
 
@@ -281,6 +283,7 @@ Keep `GEMINI_API_KEY` on the server, not in GitHub Actions. Certbot asks for a c
 
 - A SAFE result means no configured warning signal was found; it is not a guarantee that a recipient is legitimate.
 - FinGuard checks a request before handoff. It cannot observe what the user later approves in a UPI app.
+- A live CAUTION or HIGH RISK handoff stays disabled until the user acknowledges three independent checks, and still requires the existing warning confirmation; those acknowledgements are not proof that a recipient is legitimate.
 - It has no bank-internal, NPCI-internal, VPA-age, transaction-reversal, or government-report-submission access.
 - Recipient reputation and relationship counts are clearly labelled seeded hackathon fixtures.
 - Incident drafts and share messages remain on screen until the user explicitly copies, opens, or sends them.

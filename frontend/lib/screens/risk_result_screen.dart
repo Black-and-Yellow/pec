@@ -34,6 +34,15 @@ class RiskResultScreen extends StatefulWidget {
 
 class _RiskResultScreenState extends State<RiskResultScreen> {
   bool _preparingReport = false;
+  final Set<_VerificationCheck> _completedVerifications =
+      <_VerificationCheck>{};
+
+  bool get _requiresIndependentVerification =>
+      widget.paymentHandoffEnabled && widget.assessment.level != RiskLevel.safe;
+
+  bool get _independentVerificationComplete =>
+      !_requiresIndependentVerification ||
+      _completedVerifications.length == _VerificationCheck.values.length;
 
   @override
   Widget build(BuildContext context) {
@@ -51,9 +60,13 @@ class _RiskResultScreenState extends State<RiskResultScreen> {
     final Widget actions = _ActionPanel(
       assessment: widget.assessment,
       paymentHandoffEnabled: widget.paymentHandoffEnabled,
+      isDemo: widget.isDemo,
       preparingReport: _preparingReport,
+      completedVerifications: _completedVerifications,
+      canContinue: _independentVerificationComplete,
       onStop: _stopHere,
       onContinue: _continue,
+      onVerificationChanged: _setVerification,
       onVerify: _showVerificationGuidance,
       onPrepareReport: () => _prepareReport(alreadyPaid: false),
       onShare: _shareTrustedContact,
@@ -100,6 +113,18 @@ class _RiskResultScreenState extends State<RiskResultScreen> {
       return;
     }
     final RiskLevel level = widget.assessment.level;
+    if (level != RiskLevel.safe && !_independentVerificationComplete) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Complete the independent verification checklist first.',
+            ),
+          ),
+        );
+      }
+      return;
+    }
     final bool confirmed = await confirmAction(
       context,
       title: switch (level) {
@@ -130,6 +155,16 @@ class _RiskResultScreenState extends State<RiskResultScreen> {
         showActionError(context, error);
       }
     }
+  }
+
+  void _setVerification(_VerificationCheck check, bool selected) {
+    setState(() {
+      if (selected) {
+        _completedVerifications.add(check);
+      } else {
+        _completedVerifications.remove(check);
+      }
+    });
   }
 
   Future<void> _showVerificationGuidance() async {
@@ -195,24 +230,22 @@ class _RiskResultScreenState extends State<RiskResultScreen> {
       return;
     }
     setState(() => _preparingReport = true);
-    bool preparedLocally = false;
+    bool preparedLocally = widget.isDemo;
     String report;
-    try {
-      report = await widget.services.api.prepareResponse(
-        payment: widget.payment,
-        assessment: widget.assessment,
-        alreadyPaid: alreadyPaid,
-        context: widget.contextAnalysis,
-      );
-    } on ApiException {
-      preparedLocally = true;
-      report = ReportBuilder.build(
-        payment: widget.payment,
-        assessment: widget.assessment,
-        occurredAt: DateTime.now(),
-        alreadyPaid: alreadyPaid,
-        context: widget.contextAnalysis,
-      );
+    if (widget.isDemo) {
+      report = _buildLocalReport(alreadyPaid: alreadyPaid);
+    } else {
+      try {
+        report = await widget.services.api.prepareResponse(
+          payment: widget.payment,
+          assessment: widget.assessment,
+          alreadyPaid: alreadyPaid,
+          context: widget.contextAnalysis,
+        );
+      } on ApiException {
+        preparedLocally = true;
+        report = _buildLocalReport(alreadyPaid: alreadyPaid);
+      }
     }
     if (!mounted) {
       return;
@@ -230,6 +263,31 @@ class _RiskResultScreenState extends State<RiskResultScreen> {
       ),
     );
   }
+
+  String _buildLocalReport({required bool alreadyPaid}) => ReportBuilder.build(
+    payment: widget.payment,
+    assessment: widget.assessment,
+    occurredAt: DateTime.now(),
+    alreadyPaid: alreadyPaid,
+    context: widget.contextAnalysis,
+  );
+}
+
+enum _VerificationCheck {
+  recipient(
+    'verify_recipient_checkbox',
+    'I checked the recipient VPA using a source I trust.',
+  ),
+  amount('verify_amount_checkbox', 'I reviewed the amount and currency.'),
+  independentContact(
+    'verify_independent_contact_checkbox',
+    'I ignored urgency and contact instructions in this request and verified independently.',
+  );
+
+  const _VerificationCheck(this.keyName, this.label);
+
+  final String keyName;
+  final String label;
 }
 
 class _ResultHeader extends StatelessWidget {
@@ -459,9 +517,13 @@ class _ActionPanel extends StatelessWidget {
   const _ActionPanel({
     required this.assessment,
     required this.paymentHandoffEnabled,
+    required this.isDemo,
     required this.preparingReport,
+    required this.completedVerifications,
+    required this.canContinue,
     required this.onStop,
     required this.onContinue,
+    required this.onVerificationChanged,
     required this.onVerify,
     required this.onPrepareReport,
     required this.onShare,
@@ -470,9 +532,14 @@ class _ActionPanel extends StatelessWidget {
 
   final RiskAssessment assessment;
   final bool paymentHandoffEnabled;
+  final bool isDemo;
   final bool preparingReport;
+  final Set<_VerificationCheck> completedVerifications;
+  final bool canContinue;
   final VoidCallback onStop;
   final VoidCallback onContinue;
+  final void Function(_VerificationCheck check, bool selected)
+  onVerificationChanged;
   final VoidCallback onVerify;
   final VoidCallback onPrepareReport;
   final VoidCallback onShare;
@@ -550,7 +617,15 @@ class _ActionPanel extends StatelessWidget {
                 label: const Text('Check recipient'),
               ),
               const SizedBox(height: 10),
-              if (assessment.level == RiskLevel.highRisk) ...<Widget>[
+              if (paymentHandoffEnabled) ...<Widget>[
+                _IndependentVerificationChecklist(
+                  completed: completedVerifications,
+                  onChanged: onVerificationChanged,
+                ),
+                const SizedBox(height: 10),
+              ],
+              if (assessment.level == RiskLevel.highRisk &&
+                  !isDemo) ...<Widget>[
                 OutlinedButton.icon(
                   onPressed: preparingReport ? null : onPrepareReport,
                   icon: preparingReport
@@ -573,20 +648,138 @@ class _ActionPanel extends StatelessWidget {
               if (paymentHandoffEnabled)
                 TextButton(
                   key: const Key('continue_anyway_button'),
-                  onPressed: onContinue,
+                  onPressed: canContinue ? onContinue : null,
                   child: const Text('Continue anyway'),
                 ),
             ],
-            const Divider(height: 30),
-            TextButton.icon(
-              key: const Key('already_paid_button'),
-              onPressed: preparingReport ? null : onAlreadyPaid,
-              icon: const Icon(Icons.receipt_long_outlined),
-              label: const Text('I already paid'),
+            if (!isDemo) ...<Widget>[
+              const Divider(height: 30),
+              TextButton.icon(
+                key: const Key('already_paid_button'),
+                onPressed: preparingReport ? null : onAlreadyPaid,
+                icon: const Icon(Icons.receipt_long_outlined),
+                label: const Text('I already paid'),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _IndependentVerificationChecklist extends StatelessWidget {
+  const _IndependentVerificationChecklist({
+    required this.completed,
+    required this.onChanged,
+  });
+
+  final Set<_VerificationCheck> completed;
+  final void Function(_VerificationCheck check, bool selected) onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final int completedCount = completed.length;
+    final bool isComplete = completedCount == _VerificationCheck.values.length;
+
+    return Material(
+      key: const Key('independent_verification_checklist'),
+      color: isComplete
+          ? AppColors.safe.withValues(alpha: 0.08)
+          : AppColors.surfaceMuted,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(10),
+        side: BorderSide(color: isComplete ? AppColors.safe : AppColors.border),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Text(
+              'Verify before continuing',
+              style: Theme.of(context).textTheme.titleSmall,
+            ),
+            const SizedBox(height: 2),
+            Text(
+              'Confirm these details away from the payment request.',
+              style: Theme.of(
+                context,
+              ).textTheme.bodySmall?.copyWith(color: AppColors.inkMuted),
+            ),
+            const SizedBox(height: 6),
+            for (final _VerificationCheck check in _VerificationCheck.values)
+              _VerificationCheckbox(
+                key: Key(check.keyName),
+                value: completed.contains(check),
+                label: check.label,
+                onChanged: (bool selected) => onChanged(check, selected),
+              ),
+            const SizedBox(height: 4),
+            Semantics(
+              liveRegion: true,
+              label: isComplete
+                  ? 'Independent verification complete'
+                  : '$completedCount of 3 verification steps complete',
+              child: AnimatedSwitcher(
+                duration: const Duration(milliseconds: 180),
+                child: Row(
+                  key: ValueKey<bool>(isComplete),
+                  children: <Widget>[
+                    Icon(
+                      isComplete
+                          ? Icons.verified_outlined
+                          : Icons.pending_outlined,
+                      size: 18,
+                      color: isComplete ? AppColors.safe : AppColors.inkMuted,
+                    ),
+                    const SizedBox(width: 7),
+                    Expanded(
+                      child: Text(
+                        isComplete
+                            ? 'Verification complete'
+                            : '$completedCount of 3 checked',
+                        key: const Key('verification_progress'),
+                        style: Theme.of(context).textTheme.labelMedium
+                            ?.copyWith(
+                              color: isComplete
+                                  ? AppColors.safe
+                                  : AppColors.inkMuted,
+                            ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ),
           ],
         ),
       ),
     );
   }
+}
+
+class _VerificationCheckbox extends StatelessWidget {
+  const _VerificationCheckbox({
+    required super.key,
+    required this.value,
+    required this.label,
+    required this.onChanged,
+  });
+
+  final bool value;
+  final String label;
+  final ValueChanged<bool> onChanged;
+
+  @override
+  Widget build(BuildContext context) => CheckboxListTile(
+    value: value,
+    onChanged: (bool? selected) => onChanged(selected ?? false),
+    controlAffinity: ListTileControlAffinity.leading,
+    contentPadding: EdgeInsets.zero,
+    dense: true,
+    visualDensity: VisualDensity.compact,
+    title: Text(label, style: Theme.of(context).textTheme.bodySmall),
+  );
 }

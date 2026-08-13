@@ -1,5 +1,6 @@
 import 'package:finguard/app.dart';
 import 'package:finguard/screens/home_screen.dart';
+import 'package:finguard/screens/risk_lab_screen.dart';
 import 'package:finguard/services/app_services.dart';
 import 'package:finguard/services/demo_repository.dart';
 import 'package:finguard/services/local_store.dart';
@@ -37,7 +38,33 @@ void main() {
       AppColors.chrome,
     );
     expect(find.text('Reliable demo cases'), findsOneWidget);
+    expect(find.byKey(const Key('open_risk_lab_button')), findsOneWidget);
     expect(find.textContaining('does not intercept'), findsOneWidget);
+  });
+
+  testWidgets('home opens the offline Risk Lab comparison', (
+    WidgetTester tester,
+  ) async {
+    final AppServices services = AppServices(
+      api: FakeApi(),
+      store: MemoryLocalStore(),
+      externalActions: FakeExternalActions(),
+      demos: const DemoRepository(),
+    );
+
+    await tester.pumpWidget(FinGuardApp(services: services));
+    final Finder openLab = find.byKey(const Key('open_risk_lab_button'));
+    await tester.scrollUntilVisible(
+      openLab,
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.tap(openLab);
+    await tester.pumpAndSettle();
+
+    expect(find.byType(RiskLabScreen), findsOneWidget);
+    expect(find.text('OFFLINE SHOWCASE'), findsOneWidget);
+    expect(find.text('Compare policy evidence'), findsOneWidget);
   });
 
   testWidgets('seeded fake KYC demo opens the locked high-risk result', (

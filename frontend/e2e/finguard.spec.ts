@@ -74,6 +74,7 @@ const riskCases = [
     uri: 'upi://pay?pa=live.coffee%40okaxis&pn=Live%20Coffee&am=180&cu=INR',
     action: 'Continue to UPI app',
     confirmation: 'Open this request in a UPI app?',
+    requiresVerification: false,
   },
   {
     name: 'caution',
@@ -81,6 +82,7 @@ const riskCases = [
     uri: 'upi://pay?pa=live.market%40okaxis&pn=Live%20Market&am=4500&cu=INR',
     action: 'Continue anyway',
     confirmation: 'Continue with caution?',
+    requiresVerification: true,
   },
   {
     name: 'high',
@@ -88,6 +90,7 @@ const riskCases = [
     uri: 'upi://pay?pa=secure-kyc-update%40okaxis&pn=KYC%20Support&am=25000&cu=INR&tn=Urgent%20KYC%20account%20block',
     action: 'Continue anyway',
     confirmation: 'Continue despite high risk?',
+    requiresVerification: true,
   },
 ] as const;
 
@@ -107,13 +110,63 @@ for (const riskCase of riskCases) {
       fullPage: true,
     });
 
-    await page.getByRole('button', { name: riskCase.action }).click();
+    const handoff = page.getByRole('button', { name: riskCase.action });
+    if (riskCase.requiresVerification) {
+      await expect(handoff).toBeDisabled();
+      await page.getByRole('checkbox', {
+        name: 'I checked the recipient VPA using a source I trust.',
+      }).check();
+      await page.getByRole('checkbox', {
+        name: 'I reviewed the amount and currency.',
+      }).check();
+      await page.getByRole('checkbox', {
+        name: /I ignored urgency and contact instructions/,
+      }).check();
+      await expect(page.getByText('Verification complete')).toBeVisible();
+      await expect(handoff).toBeEnabled();
+    }
+    await handoff.click();
     await expect(page.getByText(riskCase.confirmation)).toBeVisible();
     await page.getByRole('button', { name: 'Cancel' }).click();
     await expect(page.getByText(riskCase.confirmation)).toBeHidden();
     expectClean(diagnostics);
   });
 }
+
+test('offline Risk Lab compares outcomes responsively and stays view-only', async ({ page }) => {
+  const diagnostics = observe(page);
+  await openAsGuest(page);
+  await page.getByRole('button', { name: 'Compare in Risk Lab' }).click();
+  await expect(page.getByText('Compare policy evidence')).toBeVisible();
+  await expect(page.getByText(/never call the API, AI or a UPI app/i)).toBeVisible();
+
+  await page.getByRole('button', {
+    name: /Fake KYC request, HIGH RISK, score 99 of 100/,
+  }).click();
+  await expect(page.getByText('Recipient matches a seeded scam indicator')).toBeVisible();
+  await page.screenshot({
+    path: path.join(visualQaRoot, 'risk-lab-1440.png'),
+    fullPage: true,
+  });
+
+  await page.setViewportSize({ width: 375, height: 812 });
+  const overflow = await page.evaluate(() => document.documentElement.scrollWidth - innerWidth);
+  expect(overflow).toBeLessThanOrEqual(1);
+  await page.screenshot({
+    path: path.join(visualQaRoot, 'risk-lab-375.png'),
+    fullPage: true,
+  });
+
+  await page.getByRole('button', { name: 'Open view-only result' }).click();
+  await expect(
+    page.getByRole('group', { name: /This result is view-only\. No UPI app can be opened from it\./ }),
+  ).toBeVisible();
+  await expect(page.getByRole('button', { name: /Continue.*UPI app/i })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Prepare report' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Alert trusted contact' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'I already paid' })).toHaveCount(0);
+  expectClean(diagnostics);
+});
 
 test('demo and reopened history remain view-only', async ({ page }) => {
   const diagnostics = observe(page);
@@ -126,6 +179,9 @@ test('demo and reopened history remain view-only', async ({ page }) => {
     page.getByRole('group', { name: /This result is view-only\. No UPI app can be opened from it\./ }),
   ).toBeVisible();
   await expect(page.getByRole('button', { name: /Continue.*UPI app/i })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Prepare report' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Alert trusted contact' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'I already paid' })).toHaveCount(0);
   await page.getByRole('button', { name: 'Close result' }).click();
   await page.getByRole('button', { name: 'Check history' }).click();
   await page.getByText('KYC Support').click();
@@ -133,6 +189,9 @@ test('demo and reopened history remain view-only', async ({ page }) => {
     page.getByRole('group', { name: /This result is view-only\. No UPI app can be opened from it\./ }),
   ).toBeVisible();
   await expect(page.getByRole('button', { name: /Continue.*UPI app/i })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Prepare report' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Alert trusted contact' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'I already paid' })).toHaveCount(0);
   expectClean(diagnostics);
 });
 
@@ -141,7 +200,7 @@ test('responsive home layouts fit 375, 768 and 1440 pixels', async ({ page }) =>
   await openAsGuest(page);
   for (const width of [375, 768, 1440]) {
     await page.setViewportSize({ width, height: width === 375 ? 812 : 900 });
-    await expect(page.getByRole('group', { name: /^Check a payment request/ })).toBeVisible();
+    await expect(page.getByText('Check a payment request', { exact: true })).toBeVisible();
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth - innerWidth);
     expect(overflow).toBeLessThanOrEqual(1);
     await page.screenshot({

@@ -141,6 +141,26 @@ void main() {
     );
     expect(find.byKey(const Key('stop_here_button')), findsOneWidget);
     expect(find.text('Check recipient'), findsOneWidget);
+    expect(
+      find.byKey(const Key('independent_verification_checklist')),
+      findsOneWidget,
+    );
+    expect(
+      tester
+          .widget<TextButton>(find.byKey(const Key('continue_anyway_button')))
+          .onPressed,
+      isNull,
+    );
+
+    await _completeIndependentVerification(tester);
+
+    expect(find.text('Verification complete'), findsOneWidget);
+    expect(
+      tester
+          .widget<TextButton>(find.byKey(const Key('continue_anyway_button')))
+          .onPressed,
+      isNotNull,
+    );
     await tester.tap(find.byKey(const Key('continue_anyway_button')));
     await tester.pumpAndSettle();
 
@@ -209,6 +229,16 @@ void main() {
       250,
       scrollable: find.byType(Scrollable).first,
     );
+    expect(
+      tester
+          .widget<TextButton>(find.byKey(const Key('continue_anyway_button')))
+          .onPressed,
+      isNull,
+    );
+    expect(actions.upiOpenCount, 0);
+
+    await _completeIndependentVerification(tester);
+
     await tester.tap(find.byKey(const Key('continue_anyway_button')));
     await tester.pumpAndSettle();
 
@@ -223,9 +253,10 @@ void main() {
   testWidgets('demo result is view-only and cannot open a UPI app', (
     WidgetTester tester,
   ) async {
+    final FakeApi api = FakeApi();
     final FakeExternalActions actions = FakeExternalActions();
     final AppServices services = AppServices(
-      api: FakeApi(),
+      api: api,
       store: MemoryLocalStore(),
       externalActions: actions,
       demos: const DemoRepository(),
@@ -269,9 +300,38 @@ void main() {
     );
     expect(find.byKey(const Key('continue_upi_button')), findsNothing);
     expect(find.byKey(const Key('continue_anyway_button')), findsNothing);
+    expect(
+      find.byKey(const Key('independent_verification_checklist')),
+      findsNothing,
+    );
     expect(find.text('Check recipient'), findsOneWidget);
-    expect(find.text('Prepare report'), findsOneWidget);
-    expect(find.byKey(const Key('already_paid_button')), findsOneWidget);
+    expect(find.text('Prepare report'), findsNothing);
+    expect(find.text('Alert trusted contact'), findsNothing);
+    expect(find.byKey(const Key('already_paid_button')), findsNothing);
     expect(actions.upiOpenCount, 0);
+    expect(api.prepareResponseCount, 0);
+    expect(actions.shareCount, 0);
   });
+}
+
+Future<void> _completeIndependentVerification(WidgetTester tester) async {
+  for (final Key key in <Key>[
+    const Key('verify_recipient_checkbox'),
+    const Key('verify_amount_checkbox'),
+    const Key('verify_independent_contact_checkbox'),
+  ]) {
+    await tester.scrollUntilVisible(
+      find.byKey(key),
+      180,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.tap(find.byKey(key));
+    await tester.pump();
+  }
+  await tester.scrollUntilVisible(
+    find.byKey(const Key('continue_anyway_button')),
+    180,
+    scrollable: find.byType(Scrollable).first,
+  );
+  await tester.pumpAndSettle();
 }

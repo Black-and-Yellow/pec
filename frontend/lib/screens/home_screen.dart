@@ -12,6 +12,7 @@ import 'account_screen.dart';
 import 'context_screen.dart';
 import 'history_screen.dart';
 import 'paste_screen.dart';
+import 'risk_lab_screen.dart';
 import 'risk_result_screen.dart';
 import 'scanner_screen.dart';
 
@@ -78,6 +79,7 @@ class _HomeScreenState extends State<HomeScreen> {
           final Widget demos = _DemoSection(
             loadingId: _loadingDemoId,
             onSelected: _openDemo,
+            onCompare: _openRiskLab,
           );
           return Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -129,6 +131,16 @@ class _HomeScreenState extends State<HomeScreen> {
       MaterialPageRoute<void>(
         builder: (BuildContext context) =>
             ContextScreen(services: widget.services),
+      ),
+    ),
+  );
+
+  void _openRiskLab() => unawaited(
+    Navigator.push<void>(
+      context,
+      MaterialPageRoute<void>(
+        builder: (BuildContext context) =>
+            RiskLabScreen(services: widget.services),
       ),
     ),
   );
@@ -268,10 +280,15 @@ class _PrimaryActions extends StatelessWidget {
 }
 
 class _DemoSection extends StatelessWidget {
-  const _DemoSection({required this.loadingId, required this.onSelected});
+  const _DemoSection({
+    required this.loadingId,
+    required this.onSelected,
+    required this.onCompare,
+  });
 
   final String? loadingId;
   final ValueChanged<String> onSelected;
+  final VoidCallback onCompare;
 
   @override
   Widget build(BuildContext context) => Column(
@@ -320,6 +337,16 @@ class _DemoSection extends StatelessWidget {
                 ],
               )
               .toList(growable: false),
+        ),
+      ),
+      const SizedBox(height: 10),
+      Align(
+        alignment: Alignment.centerRight,
+        child: TextButton.icon(
+          key: const Key('open_risk_lab_button'),
+          onPressed: loadingId == null ? onCompare : null,
+          icon: const Icon(Icons.science_outlined),
+          label: const Text('Compare in Risk Lab'),
         ),
       ),
     ],

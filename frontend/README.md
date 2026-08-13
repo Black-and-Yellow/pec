@@ -1,6 +1,6 @@
 # FinGuard Flutter client
 
-One Flutter codebase serves Android and Web. It includes a responsive welcome/home experience, email/password and Google identity, account-free guest access, secure session restoration, account privacy controls, QR/link intake, explainable scoring, recovery, and deliberate UPI handoff.
+One Flutter codebase serves Android and Web. It includes a responsive welcome/home experience, email/password and Google identity, account-free guest access, secure session restoration, account privacy controls, QR/link intake, an offline Risk Lab, explainable scoring, recovery, and deliberate UPI handoff.
 
 FinGuard does not intercept, freeze, cancel, reverse or observe transactions inside third-party UPI apps.
 
@@ -86,7 +86,8 @@ it does not make the debug certificate suitable for distribution.
 - `POST /api/v1/context/analyze` accepts selected text and an optional size/type-checked PNG, JPEG or WebP screenshot. `consent_to_external_ai` is false unless the user explicitly enables Gemini. A usable response carries schema-bounded signals plus the matching short-lived integrity token; unavailable or stale analysis is not forwarded as context. Local text rules and deterministic payment scoring remain available when Gemini is disabled or over quota.
 - `POST /api/v1/response/prepare` accepts strict payment, assessment, context and `already_paid` objects. The client formats its structured incident report and falls back to a complete deterministic local draft if the service is unavailable.
 - The three home-screen scenarios are bundled, clearly labelled fixtures so SAFE (0), CAUTION (33), and HIGH RISK (99) remain immediate and deterministic without a server or AI connection. They mirror the backend demo data.
+- Risk Lab compares those three bundled outcomes and can open only view-only demo results; it never calculates a verdict, enables payment handoff, or exposes report/share/recovery actions for seeded data.
 
-The client accepts only validated `upi://pay` input with a valid `pa` recipient, INR currency and safe amount. Duplicate fields, malformed VPAs, arbitrary scanned URLs and non-canonical handoff data are rejected. Every UPI handoff, native share, report preparation, and official cybercrime route is kept behind an explicit user action or confirmation.
+The client accepts only validated `upi://pay` input with a valid `pa` recipient, INR currency and safe amount. Duplicate fields, malformed VPAs, arbitrary scanned URLs and non-canonical handoff data are rejected. A live CAUTION or HIGH RISK handoff also requires all three independent-verification acknowledgements before the existing warning confirmation. Every UPI handoff, native share, report preparation, and official cybercrime route is kept behind an explicit user action or confirmation.
 
 The refresh credential is stored with platform secure storage and rotated by the API; access credentials remain in memory. Guest mode stores only a local preference. A signed-in user can revoke the local session or permanently delete the FinGuard identity and all server sessions from Account & privacy.

@@ -71,7 +71,7 @@ class _IncidentScreenState extends State<IncidentScreen> {
           const SizedBox(height: 8),
           Text(
             widget.preparedLocally
-                ? 'Optional AI drafting was unavailable, so FinGuard prepared this complete local template.'
+                ? 'FinGuard prepared this complete local template; no payment details were sent to a drafting service.'
                 : 'Nothing has been submitted. Review and edit after copying if any detail is incomplete.',
             style: Theme.of(
               context,
