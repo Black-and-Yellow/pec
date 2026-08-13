@@ -1,9 +1,10 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 import time
 from collections.abc import AsyncIterator
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, suppress
 from uuid import uuid4
 
 from fastapi import FastAPI, Request
@@ -25,9 +26,28 @@ from app.repositories.transaction_repository import TransactionRepository
 from app.repositories.user_repository import UserRepository
 from app.services.auth_service import AuthService
 from app.services.context_analyzer import ContextAnalyzer
+from app.services.context_integrity import ContextIntegrityService
 from app.services.risk_engine import RiskEngine
 
 logger = logging.getLogger("finguard")
+_ASSESSMENT_CLEANUP_INTERVAL_SECONDS = 60 * 60
+
+
+async def _periodic_assessment_cleanup(
+    database: Database,
+    *,
+    retention_days: int,
+    interval_seconds: float,
+) -> None:
+    while True:
+        await asyncio.sleep(interval_seconds)
+        try:
+            with database.session() as session:
+                TransactionRepository(session).delete_expired_assessments_batch(
+                    retention_days=retention_days
+                )
+        except Exception:
+            logger.exception("assessment_retention_cleanup_failed")
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -52,9 +72,20 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 retention_days=application_settings.assessment_retention_days
             )
             UserRepository(session).delete_stale_refresh_sessions()
+        cleanup_task = asyncio.create_task(
+            _periodic_assessment_cleanup(
+                database,
+                retention_days=application_settings.assessment_retention_days,
+                interval_seconds=_ASSESSMENT_CLEANUP_INTERVAL_SECONDS,
+            ),
+            name="assessment-retention-cleanup",
+        )
         try:
             yield
         finally:
+            cleanup_task.cancel()
+            with suppress(asyncio.CancelledError):
+                await cleanup_task
             database.dispose()
 
     api = FastAPI(
@@ -67,6 +98,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     api.state.database = database
     api.state.risk_engine = RiskEngine()
     api.state.auth_service = AuthService(application_settings)
+    api.state.context_integrity = ContextIntegrityService(
+        application_settings.auth_secret_key
+    )
     api.state.context_analyzer = ContextAnalyzer(
         gemini_client=gemini_client,
         enabled=application_settings.enable_ai_context,
@@ -78,7 +112,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         allow_origins=list(application_settings.allowed_origins),
         allow_credentials=False,
         allow_methods=["GET", "POST", "OPTIONS"],
-        allow_headers=["Content-Type", "Accept", "Authorization"],
+        allow_headers=[
+            "Content-Type",
+            "Accept",
+            "Authorization",
+            "X-FinGuard-Device-ID",
+        ],
     )
 
     @api.middleware("http")

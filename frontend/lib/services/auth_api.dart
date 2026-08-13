@@ -17,10 +17,7 @@ abstract interface class FinGuardAuthApi {
   Future<AuthSession> googleLogin(String idToken);
   Future<AuthSession> refresh(String refreshToken);
   Future<void> logout(String refreshToken);
-  Future<void> deleteAccount({
-    required String accessToken,
-    String? password,
-  });
+  Future<void> deleteAccount({required String accessToken, String? password});
 }
 
 final class AuthApiService implements FinGuardAuthApi {
@@ -99,10 +96,7 @@ final class AuthApiService implements FinGuardAuthApi {
   }) async {
     await _request(
       'api/v1/auth/account/delete',
-      body: <String, Object?>{
-        'confirmation': 'DELETE',
-        'password': ?password,
-      },
+      body: <String, Object?>{'confirmation': 'DELETE', 'password': ?password},
       accessToken: accessToken,
     );
   }
@@ -153,6 +147,13 @@ final class AuthApiService implements FinGuardAuthApi {
         (Object? key, Object? value) => MapEntry(key.toString(), value),
       );
     } on FormatException {
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        throw ApiException(
+          'The account request could not be completed.',
+          retryable: response.statusCode >= 500,
+          statusCode: response.statusCode,
+        );
+      }
       throw const ApiException(
         'The account service returned an invalid response.',
       );
@@ -163,11 +164,16 @@ final class AuthApiService implements FinGuardAuthApi {
           ? errorValue
           : null;
       final Object? message = error?['message'];
+      final Object? code = error?['code'];
       throw ApiException(
         message is String && message.trim().isNotEmpty
             ? message.trim()
             : 'The account request could not be completed.',
         retryable: response.statusCode >= 500,
+        statusCode: response.statusCode,
+        errorCode: code is String && code.trim().isNotEmpty
+            ? code.trim()
+            : null,
       );
     }
     return json;

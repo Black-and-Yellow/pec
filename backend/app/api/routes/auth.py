@@ -32,6 +32,7 @@ from app.services.auth_service import (
     AuthenticationError,
     AuthService,
     GoogleAuthenticationUnavailable,
+    RegistrationCapacityError,
     RegistrationError,
 )
 
@@ -58,6 +59,15 @@ def register(
             password=payload.password,
             display_name=payload.display_name,
         )
+    except RegistrationCapacityError as exc:
+        session.rollback()
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "code": "REGISTRATION_UNAVAILABLE",
+                "message": "New account registration is temporarily unavailable",
+            },
+        ) from exc
     except (RegistrationError, IntegrityError) as exc:
         session.rollback()
         raise HTTPException(
@@ -96,6 +106,15 @@ def google_login(
             status_code=503,
             detail={"code": "GOOGLE_AUTH_UNAVAILABLE", "message": str(exc)},
         ) from exc
+    except RegistrationCapacityError as exc:
+        session.rollback()
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "code": "REGISTRATION_UNAVAILABLE",
+                "message": "New account registration is temporarily unavailable",
+            },
+        ) from exc
     except AuthenticationError as exc:
         raise HTTPException(
             status_code=401,
@@ -110,9 +129,7 @@ def refresh(
     service: Annotated[AuthService, Depends(get_auth_service)],
 ) -> AuthTokenResponse:
     try:
-        return service.refresh(
-            UserRepository(session), raw_refresh_token=payload.refresh_token
-        )
+        return service.refresh(UserRepository(session), raw_refresh_token=payload.refresh_token)
     except AuthenticationError as exc:
         raise HTTPException(
             status_code=401,
@@ -127,9 +144,7 @@ def logout(
     service: Annotated[AuthService, Depends(get_auth_service)],
 ) -> LogoutResponse:
     return LogoutResponse(
-        revoked=service.logout(
-            UserRepository(session), raw_refresh_token=payload.refresh_token
-        )
+        revoked=service.logout(UserRepository(session), raw_refresh_token=payload.refresh_token)
     )
 
 
@@ -146,9 +161,7 @@ def delete_account(
     service: Annotated[AuthService, Depends(get_auth_service)],
 ) -> DeleteAccountResponse:
     try:
-        service.delete_account(
-            UserRepository(session), user=user, password=payload.password
-        )
+        service.delete_account(UserRepository(session), user=user, password=payload.password)
     except AuthenticationError as exc:
         raise HTTPException(
             status_code=401,

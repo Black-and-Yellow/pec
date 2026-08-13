@@ -34,39 +34,86 @@ final class AuthController extends ChangeNotifier {
   bool _busy = false;
   String? _error;
   bool _googleInitialized = false;
+  bool _canRetrySessionRestore = false;
+
+  static const String _storageError =
+      'FinGuard could not access secure session storage. Try again.';
 
   AuthStatus get status => _status;
   AuthUser? get user => _session?.user;
   String? get accessToken => _session?.accessToken;
   bool get busy => _busy;
   String? get error => _error;
+  bool get canRetrySessionRestore => _canRetrySessionRestore;
   bool get googleEnabled => _capabilities.google && _googleInitialized;
   bool get emailPasswordEnabled => _capabilities.emailPassword;
 
   Future<void> initialize() async {
     _status = AuthStatus.loading;
+    _session = null;
+    _busy = false;
+    _error = null;
+    _canRetrySessionRestore = false;
     notifyListeners();
     try {
       _capabilities = await _api.capabilities();
-    } on ApiException {
+    } on Object {
       _capabilities = const AuthCapabilities(
         emailPassword: true,
         google: false,
       );
     }
     await _initializeGoogleIfAvailable();
-    final String? refreshToken = await _store.readRefreshToken();
+    late String? refreshToken;
+    try {
+      refreshToken = await _store.readRefreshToken();
+    } on Object {
+      _finishSessionRestoreFailure(_storageError);
+      return;
+    }
     if (refreshToken != null && refreshToken.isNotEmpty) {
       try {
-        await _acceptSession(await _api.refresh(refreshToken));
+        final AuthSession refreshed = await _api.refresh(refreshToken);
+        if (await _acceptSession(refreshed)) {
+          return;
+        }
+        _finishSessionRestoreFailure(_storageError);
+        return;
+      } on ApiException catch (error) {
+        if (!error.definitivelyRejectsSession) {
+          _finishSessionRestoreFailure(
+            'FinGuard could not restore your saved session. Check the connection and try again.',
+          );
+          return;
+        }
+        try {
+          await _store.clear();
+        } on Object {
+          _finishSessionRestoreFailure(_storageError);
+          return;
+        }
+        _finishSignedOut();
+        return;
+      } on FormatException {
+        _finishSessionRestoreFailure(
+          'FinGuard could not validate the restored session. Try again.',
+        );
         return;
       } on Object {
-        await _store.clear();
+        _finishSessionRestoreFailure(
+          'FinGuard could not restore your saved session. Try again.',
+        );
+        return;
       }
     }
-    _status = await _store.readGuestMode()
-        ? AuthStatus.guest
-        : AuthStatus.signedOut;
+    late bool guestMode;
+    try {
+      guestMode = await _store.readGuestMode();
+    } on Object {
+      _finishSessionRestoreFailure(_storageError);
+      return;
+    }
+    _status = guestMode ? AuthStatus.guest : AuthStatus.signedOut;
     notifyListeners();
   }
 
@@ -108,17 +155,33 @@ final class AuthController extends ChangeNotifier {
   }
 
   Future<void> continueAsGuest() async {
-    await _store.saveGuestMode(true);
+    _setBusy(true);
+    try {
+      await _store.saveGuestMode(true);
+    } on Object {
+      _setError(_storageError);
+      return;
+    }
     _session = null;
+    _busy = false;
     _error = null;
+    _canRetrySessionRestore = false;
     _status = AuthStatus.guest;
     notifyListeners();
   }
 
   Future<void> leaveGuestMode() async {
-    await _store.saveGuestMode(false);
+    _setBusy(true);
+    try {
+      await _store.saveGuestMode(false);
+    } on Object {
+      _setError(_storageError);
+      return;
+    }
+    _busy = false;
     _status = AuthStatus.signedOut;
     _error = null;
+    _canRetrySessionRestore = false;
     notifyListeners();
   }
 
@@ -139,10 +202,16 @@ final class AuthController extends ChangeNotifier {
     } on Object {
       // The FinGuard session is authoritative; Google cleanup is best effort.
     }
-    await _store.clear();
+    try {
+      await _store.clear();
+    } on Object {
+      _setError(_storageError);
+      return;
+    }
     _session = null;
     _busy = false;
     _error = null;
+    _canRetrySessionRestore = false;
     _status = AuthStatus.signedOut;
     notifyListeners();
   }
@@ -156,10 +225,16 @@ final class AuthController extends ChangeNotifier {
     _setBusy(true);
     try {
       await _api.deleteAccount(accessToken: token, password: password);
-      await _store.clear();
+      bool storageCleared = true;
+      try {
+        await _store.clear();
+      } on Object {
+        storageCleared = false;
+      }
       _session = null;
       _busy = false;
-      _error = null;
+      _error = storageCleared ? null : _storageError;
+      _canRetrySessionRestore = false;
       _status = AuthStatus.signedOut;
       notifyListeners();
       return true;
@@ -172,6 +247,7 @@ final class AuthController extends ChangeNotifier {
   void clearError() {
     if (_error != null) {
       _error = null;
+      _canRetrySessionRestore = false;
       notifyListeners();
     }
   }
@@ -179,11 +255,15 @@ final class AuthController extends ChangeNotifier {
   Future<void> _runAuth(Future<AuthSession> Function() operation) async {
     _setBusy(true);
     try {
-      await _acceptSession(await operation());
+      if (!await _acceptSession(await operation())) {
+        _setError(_storageError);
+      }
     } on ApiException catch (error) {
       _setError(error.message);
     } on FormatException {
       _setError('The account service returned an invalid session.');
+    } on Object {
+      _setError('FinGuard could not complete sign-in. Try again.');
     } finally {
       if (_status != AuthStatus.authenticated) {
         _setBusy(false);
@@ -191,16 +271,25 @@ final class AuthController extends ChangeNotifier {
     }
   }
 
-  Future<void> _acceptSession(AuthSession session) async {
-    await _store.saveRefreshToken(session.refreshToken);
+  Future<bool> _acceptSession(AuthSession session) async {
+    try {
+      await _store.saveRefreshToken(session.refreshToken);
+    } on Object {
+      return false;
+    }
     _session = session;
     _busy = false;
     _error = null;
+    _canRetrySessionRestore = false;
     _status = AuthStatus.authenticated;
     notifyListeners();
+    return true;
   }
 
   Future<void> _initializeGoogleIfAvailable() async {
+    if (_googleInitialized) {
+      return;
+    }
     final String clientId = AppConfig.googleWebClientId.trim();
     final String serverClientId = AppConfig.googleAndroidServerClientId.trim();
     if (!_capabilities.google ||
@@ -238,6 +327,7 @@ final class AuthController extends ChangeNotifier {
     _busy = value;
     if (value) {
       _error = null;
+      _canRetrySessionRestore = false;
     }
     notifyListeners();
   }
@@ -245,6 +335,25 @@ final class AuthController extends ChangeNotifier {
   void _setError(String message) {
     _busy = false;
     _error = message;
+    _canRetrySessionRestore = false;
+    notifyListeners();
+  }
+
+  void _finishSessionRestoreFailure(String message) {
+    _session = null;
+    _status = AuthStatus.signedOut;
+    _busy = false;
+    _error = message;
+    _canRetrySessionRestore = true;
+    notifyListeners();
+  }
+
+  void _finishSignedOut() {
+    _session = null;
+    _status = AuthStatus.signedOut;
+    _busy = false;
+    _error = null;
+    _canRetrySessionRestore = false;
     notifyListeners();
   }
 

@@ -33,9 +33,10 @@ class PageBody extends StatelessWidget {
 }
 
 class FinGuardBrand extends StatelessWidget {
-  const FinGuardBrand({super.key, this.compact = false});
+  const FinGuardBrand({super.key, this.compact = false, this.inverse = false});
 
   final bool compact;
+  final bool inverse;
 
   @override
   Widget build(BuildContext context) => Row(
@@ -45,12 +46,12 @@ class FinGuardBrand extends StatelessWidget {
         width: compact ? 32 : 38,
         height: compact ? 32 : 38,
         decoration: BoxDecoration(
-          color: AppColors.teal,
-          borderRadius: BorderRadius.circular(9),
+          color: inverse ? Colors.white : AppColors.teal,
+          borderRadius: BorderRadius.circular(6),
         ),
         child: Icon(
           Icons.shield_outlined,
-          color: Colors.white,
+          color: inverse ? AppColors.tealDark : Colors.white,
           size: compact ? 19 : 22,
           semanticLabel: 'FinGuard shield',
         ),
@@ -59,11 +60,104 @@ class FinGuardBrand extends StatelessWidget {
       Text(
         'FinGuard',
         style: Theme.of(context).textTheme.titleLarge?.copyWith(
-          color: AppColors.tealDark,
+          color: inverse ? Colors.white : AppColors.tealDark,
           letterSpacing: -0.4,
         ),
       ),
     ],
+  );
+}
+
+class WorkspacePanel extends StatelessWidget {
+  const WorkspacePanel({required this.child, super.key, this.padding});
+
+  final Widget child;
+  final EdgeInsetsGeometry? padding;
+
+  @override
+  Widget build(BuildContext context) => DecoratedBox(
+    decoration: BoxDecoration(
+      color: AppColors.surface,
+      border: Border.all(color: AppColors.border),
+      borderRadius: BorderRadius.circular(8),
+    ),
+    child: Padding(padding: padding ?? EdgeInsets.zero, child: child),
+  );
+}
+
+class WorkspaceAction extends StatelessWidget {
+  const WorkspaceAction({
+    required this.icon,
+    required this.label,
+    required this.description,
+    required this.onTap,
+    super.key,
+    this.emphasized = false,
+  });
+
+  final IconData icon;
+  final String label;
+  final String description;
+  final VoidCallback onTap;
+  final bool emphasized;
+
+  @override
+  Widget build(BuildContext context) => Semantics(
+    button: true,
+    child: Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(6),
+        hoverColor: AppColors.surfaceMuted,
+        focusColor: AppColors.tealSoft,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 15),
+          child: Row(
+            children: <Widget>[
+              Container(
+                width: 38,
+                height: 38,
+                decoration: BoxDecoration(
+                  color: emphasized ? AppColors.teal : AppColors.surfaceMuted,
+                  border: emphasized
+                      ? null
+                      : Border.all(color: AppColors.border),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Icon(
+                  icon,
+                  size: 20,
+                  color: emphasized ? Colors.white : AppColors.ink,
+                ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Text(label, style: Theme.of(context).textTheme.titleMedium),
+                    const SizedBox(height: 2),
+                    Text(
+                      description,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: AppColors.inkMuted,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 12),
+              const Icon(
+                Icons.chevron_right,
+                size: 20,
+                color: AppColors.inkMuted,
+              ),
+            ],
+          ),
+        ),
+      ),
+    ),
   );
 }
 
@@ -97,7 +191,7 @@ class RiskBadge extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         decoration: BoxDecoration(
           color: background,
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: BorderRadius.circular(6),
           border: Border.all(color: foreground.withValues(alpha: 0.28)),
         ),
         child: Row(

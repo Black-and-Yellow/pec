@@ -99,6 +99,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
           services: widget.services,
           payment: entry.payment,
           assessment: entry.assessment,
+          paymentHandoffEnabled: false,
           isDemo: entry.isDemo,
         ),
       ),

@@ -4,13 +4,16 @@ import hashlib
 import secrets
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
+from threading import Lock
 from typing import Any
 
 import jwt
+from google.auth import exceptions as google_exceptions
 from google.auth.transport import requests as google_requests
 from google.oauth2 import id_token as google_id_token
 from jwt import InvalidTokenError
 from pwdlib import PasswordHash
+from sqlalchemy.exc import OperationalError
 
 from app.auth_schemas import AuthTokenResponse, UserPayload
 from app.config import Settings
@@ -18,6 +21,8 @@ from app.db.models import User
 from app.repositories.user_repository import UserRepository
 
 password_hash = PasswordHash.recommended()
+MAX_ACTIVE_REFRESH_SESSIONS_PER_USER = 5
+STALE_REFRESH_SESSION_CLEANUP_BATCH_SIZE = 100
 
 
 class AuthenticationError(ValueError):
@@ -25,6 +30,10 @@ class AuthenticationError(ValueError):
 
 
 class RegistrationError(ValueError):
+    pass
+
+
+class RegistrationCapacityError(RegistrationError):
     pass
 
 
@@ -42,6 +51,7 @@ class GoogleIdentity:
 class AuthService:
     def __init__(self, settings: Settings) -> None:
         self._settings = settings
+        self._registration_lock = Lock()
 
     def register(
         self,
@@ -51,21 +61,31 @@ class AuthService:
         password: str,
         display_name: str,
     ) -> AuthTokenResponse:
+        self._maintain_refresh_sessions(repository)
         normalized_email = email.strip().lower()
-        if repository.get_by_email(normalized_email) is not None:
-            raise RegistrationError("An account with this email already exists")
-        user = repository.create_password_user(
-            email=normalized_email,
-            display_name=display_name,
-            password_hash=password_hash.hash(password),
-        )
-        response = self._new_session(repository, user)
-        repository.commit()
-        return response
+        with self._registration_lock:
+            if repository.get_by_email(normalized_email) is not None:
+                raise RegistrationError("An account with this email already exists")
+            if not repository.has_registration_capacity(
+                max_registered_users=self._settings.max_registered_users
+            ):
+                raise RegistrationCapacityError(
+                    "New account registration is temporarily unavailable"
+                )
+            # Release the read transaction before the deliberately expensive hash so
+            # unrelated risk/auth writes are not held behind a SQLite lock.
+            repository.rollback()
+            user = repository.create_password_user(
+                email=normalized_email,
+                display_name=display_name,
+                password_hash=password_hash.hash(password),
+            )
+            response = self._new_session(repository, user)
+            repository.commit()
+            return response
 
-    def login(
-        self, repository: UserRepository, *, email: str, password: str
-    ) -> AuthTokenResponse:
+    def login(self, repository: UserRepository, *, email: str, password: str) -> AuthTokenResponse:
+        self._maintain_refresh_sessions(repository)
         user = repository.get_by_email(email.strip().lower())
         if (
             user is None
@@ -78,41 +98,58 @@ class AuthService:
         repository.commit()
         return response
 
-    def google_login(
-        self, repository: UserRepository, *, raw_id_token: str
-    ) -> AuthTokenResponse:
+    def google_login(self, repository: UserRepository, *, raw_id_token: str) -> AuthTokenResponse:
+        self._maintain_refresh_sessions(repository)
         identity = self._verify_google_identity(raw_id_token)
         user = repository.get_by_google_subject(identity.subject)
         if user is None:
-            user = repository.get_by_email(identity.email)
-            if user is None:
-                user = repository.create_google_user(
-                    email=identity.email,
-                    display_name=identity.display_name,
-                    subject=identity.subject,
-                )
-            elif user.google_subject is None:
-                repository.link_google_subject(user, identity.subject)
+            repository.rollback()
+            with self._registration_lock:
+                user = repository.get_by_google_subject(identity.subject)
+                if user is None and repository.get_by_email(identity.email) is not None:
+                    raise AuthenticationError("Google identity token is invalid")
+                if user is None and not repository.has_registration_capacity(
+                    max_registered_users=self._settings.max_registered_users
+                ):
+                    raise RegistrationCapacityError(
+                        "New account registration is temporarily unavailable"
+                    )
+                if user is None:
+                    repository.rollback()
+                    user = repository.create_google_user(
+                        email=identity.email,
+                        display_name=identity.display_name,
+                        subject=identity.subject,
+                    )
+                    response = self._new_session(repository, user)
+                    repository.commit()
+                    return response
         if not user.is_active:
             raise AuthenticationError("This account is disabled")
         response = self._new_session(repository, user)
         repository.commit()
         return response
 
-    def refresh(
-        self, repository: UserRepository, *, raw_refresh_token: str
-    ) -> AuthTokenResponse:
-        stored = repository.get_active_refresh_session(
-            token_hash=self._hash_refresh_token(raw_refresh_token)
-        )
-        if stored is None or not stored.user.is_active:
-            raise AuthenticationError("Refresh session is invalid or expired")
-        repository.revoke_refresh_session(stored)
-        response = self._new_session(repository, stored.user)
-        repository.commit()
-        return response
+    def refresh(self, repository: UserRepository, *, raw_refresh_token: str) -> AuthTokenResponse:
+        try:
+            self._maintain_refresh_sessions(repository)
+            user = repository.consume_active_refresh_session(
+                token_hash=self._hash_refresh_token(raw_refresh_token)
+            )
+            if user is None or not user.is_active:
+                raise AuthenticationError("Refresh session is invalid or expired")
+            response = self._new_session(repository, user)
+            repository.commit()
+            return response
+        except OperationalError as exc:
+            repository.rollback()
+            database_error = str(exc.orig).lower()
+            if "locked" not in database_error and "busy" not in database_error:
+                raise
+            raise AuthenticationError("Refresh session is invalid or expired") from exc
 
     def logout(self, repository: UserRepository, *, raw_refresh_token: str) -> bool:
+        self._maintain_refresh_sessions(repository)
         stored = repository.get_active_refresh_session(
             token_hash=self._hash_refresh_token(raw_refresh_token)
         )
@@ -125,6 +162,7 @@ class AuthService:
     def delete_account(
         self, repository: UserRepository, *, user: User, password: str | None
     ) -> None:
+        self._maintain_refresh_sessions(repository)
         if user.password_hash is not None and (
             password is None or not password_hash.verify(password, user.password_hash)
         ):
@@ -167,10 +205,17 @@ class AuthService:
             algorithm="HS256",
         )
         refresh_token = secrets.token_urlsafe(48)
-        repository.create_refresh_session(
+        refresh_session = repository.create_refresh_session(
             user=user,
             token_hash=self._hash_refresh_token(refresh_token),
             expires_at=now + timedelta(days=self._settings.refresh_token_days),
+            created_at=now,
+        )
+        repository.enforce_active_refresh_session_cap(
+            user=user,
+            protected_session_id=refresh_session.id,
+            max_active=MAX_ACTIVE_REFRESH_SESSIONS_PER_USER,
+            now=now,
         )
         return AuthTokenResponse(
             access_token=access_token,
@@ -178,6 +223,10 @@ class AuthService:
             expires_in=self._settings.access_token_minutes * 60,
             user=self.user_payload(user),
         )
+
+    @staticmethod
+    def _maintain_refresh_sessions(repository: UserRepository) -> None:
+        repository.delete_stale_refresh_sessions(limit=STALE_REFRESH_SESSION_CLEANUP_BATCH_SIZE)
 
     def _verify_google_identity(self, raw_id_token: str) -> GoogleIdentity:
         allowed_audiences = set(self._settings.google_oauth_client_ids)
@@ -187,6 +236,10 @@ class AuthService:
             claims: dict[str, Any] = google_id_token.verify_oauth2_token(
                 raw_id_token, google_requests.Request(), audience=None
             )
+        except google_exceptions.TransportError as exc:
+            raise GoogleAuthenticationUnavailable(
+                "Google sign-in is temporarily unavailable"
+            ) from exc
         except ValueError as exc:
             raise AuthenticationError("Google identity token is invalid") from exc
         if claims.get("aud") not in allowed_audiences or claims.get("email_verified") is not True:

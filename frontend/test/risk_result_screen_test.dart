@@ -22,7 +22,8 @@ void main() {
       demos: const DemoRepository(),
     );
     const Payment payment = Payment(
-      upiUri: 'upi://pay?pa=coffee.corner%40okaxis&pn=Coffee%20Corner&am=180&cu=INR',
+      upiUri:
+          'upi://pay?pa=coffee.corner%40okaxis&pn=Coffee%20Corner&am=180&cu=INR',
       payeeVpa: 'coffee.corner@okaxis',
       payeeName: 'Coffee Corner',
       amount: 180,
@@ -42,6 +43,7 @@ void main() {
           services: services,
           payment: payment,
           assessment: assessment,
+          paymentHandoffEnabled: true,
         ),
       ),
     );
@@ -83,7 +85,8 @@ void main() {
       demos: const DemoRepository(),
     );
     const Payment payment = Payment(
-      upiUri: 'upi://pay?pa=market.seller%40okaxis&pn=Marketplace%20Seller&am=4500&cu=INR',
+      upiUri:
+          'upi://pay?pa=market.seller%40okaxis&pn=Marketplace%20Seller&am=4500&cu=INR',
       payeeVpa: 'market.seller@okaxis',
       payeeName: 'Marketplace Seller',
       amount: 4500,
@@ -116,6 +119,7 @@ void main() {
           services: services,
           payment: payment,
           assessment: assessment,
+          paymentHandoffEnabled: true,
         ),
       ),
     );
@@ -123,7 +127,10 @@ void main() {
     expect(find.text('CAUTION'), findsOneWidget);
     expect(find.text('33'), findsOneWidget);
     expect(find.text('First-time recipient'), findsOneWidget);
-    expect(find.text('No completed payment exists in local history'), findsOneWidget);
+    expect(
+      find.text('No completed payment exists in local history'),
+      findsOneWidget,
+    );
     expect(find.text('+18'), findsOneWidget);
     expect(find.text('+15'), findsOneWidget);
 
@@ -183,6 +190,7 @@ void main() {
           services: services,
           payment: payment,
           assessment: assessment,
+          paymentHandoffEnabled: true,
         ),
       ),
     );
@@ -209,6 +217,61 @@ void main() {
 
     await tester.tap(find.text('Cancel'));
     await tester.pumpAndSettle();
+    expect(actions.upiOpenCount, 0);
+  });
+
+  testWidgets('demo result is view-only and cannot open a UPI app', (
+    WidgetTester tester,
+  ) async {
+    final FakeExternalActions actions = FakeExternalActions();
+    final AppServices services = AppServices(
+      api: FakeApi(),
+      store: MemoryLocalStore(),
+      externalActions: actions,
+      demos: const DemoRepository(),
+    );
+    const Payment payment = Payment(
+      upiUri: 'upi://pay?pa=demo%40upi&pn=Demo&am=50&cu=INR',
+      payeeVpa: 'demo@upi',
+      payeeName: 'Demo',
+      amount: 50,
+      currency: 'INR',
+    );
+    const RiskAssessment assessment = RiskAssessment(
+      score: 80,
+      level: RiskLevel.highRisk,
+      signals: <RiskSignal>[],
+      recommendedAction: 'Demo guidance only.',
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.light,
+        home: RiskResultScreen(
+          services: services,
+          payment: payment,
+          assessment: assessment,
+          paymentHandoffEnabled: false,
+          isDemo: true,
+        ),
+      ),
+    );
+
+    await tester.scrollUntilVisible(
+      find.byKey(const Key('payment_handoff_unavailable')),
+      250,
+      scrollable: find.byType(Scrollable).first,
+    );
+    expect(find.text('SEEDED DEMO DATA'), findsOneWidget);
+    expect(
+      find.byKey(const Key('payment_handoff_unavailable')),
+      findsOneWidget,
+    );
+    expect(find.byKey(const Key('continue_upi_button')), findsNothing);
+    expect(find.byKey(const Key('continue_anyway_button')), findsNothing);
+    expect(find.text('Check recipient'), findsOneWidget);
+    expect(find.text('Prepare report'), findsOneWidget);
+    expect(find.byKey(const Key('already_paid_button')), findsOneWidget);
     expect(actions.upiOpenCount, 0);
   });
 }

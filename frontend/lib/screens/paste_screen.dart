@@ -86,7 +86,7 @@ class _PasteScreenState extends State<PasteScreen> {
               alignLabelWithHint: true,
             ),
           ),
-          if (widget.contextAnalysis != null) ...<Widget>[
+          if (widget.contextAnalysis?.hasValidatedContext == true) ...<Widget>[
             const SizedBox(height: 14),
             Container(
               width: double.infinity,
@@ -121,22 +121,32 @@ class _PasteScreenState extends State<PasteScreen> {
             ),
           ],
           const SizedBox(height: 22),
-          SizedBox(
-            width: double.infinity,
-            child: FilledButton.icon(
-              key: const Key('analyze_payment_button'),
-              onPressed: _loading ? null : _analyze,
-              icon: _loading
-                  ? const SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: Colors.white,
-                      ),
-                    )
-                  : const Icon(Icons.policy_outlined),
-              label: Text(_loading ? 'Checking request…' : 'Analyze payment'),
+          Semantics(
+            container: _loading,
+            liveRegion: _loading,
+            label: _loading ? 'Checking request' : null,
+            child: ExcludeSemantics(
+              excluding: _loading,
+              child: SizedBox(
+                width: double.infinity,
+                child: FilledButton.icon(
+                  key: const Key('analyze_payment_button'),
+                  onPressed: _loading ? null : _analyze,
+                  icon: _loading
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
+                      : const Icon(Icons.policy_outlined),
+                  label: Text(
+                    _loading ? 'Checking request…' : 'Analyze payment',
+                  ),
+                ),
+              ),
             ),
           ),
           const SizedBox(height: 16),
@@ -165,20 +175,27 @@ class _PasteScreenState extends State<PasteScreen> {
       _error = null;
     });
     try {
+      final ContextAnalysis? validatedContext =
+          widget.contextAnalysis?.hasValidatedContext == true
+          ? widget.contextAnalysis
+          : null;
       final Payment payment = await widget.services.api.parsePayment(raw);
       final String deviceId = await widget.services.store.deviceId();
-      final RiskAssessment assessment = await widget.services.api.scorePayment(
-        payment: payment,
-        deviceId: deviceId,
-        context: widget.contextAnalysis,
-      );
-      final DateTime checkedAt = DateTime.now();
+      final RiskScoreResult scoreResult = await widget.services.api
+          .scorePayment(
+            payment: payment,
+            deviceId: deviceId,
+            context: validatedContext,
+          );
+      final Payment validatedPayment = scoreResult.payment;
+      final RiskAssessment assessment = scoreResult.assessment;
+      final DateTime checkedAt = scoreResult.assessedAt;
       try {
         await widget.services.store.addHistory(
           HistoryEntry(
             id: 'check_${checkedAt.microsecondsSinceEpoch}',
             checkedAt: checkedAt,
-            payment: payment,
+            payment: validatedPayment,
             assessment: assessment,
           ),
         );
@@ -194,9 +211,10 @@ class _PasteScreenState extends State<PasteScreen> {
         MaterialPageRoute<void>(
           builder: (BuildContext context) => RiskResultScreen(
             services: widget.services,
-            payment: payment,
+            payment: validatedPayment,
             assessment: assessment,
-            contextAnalysis: widget.contextAnalysis,
+            paymentHandoffEnabled: scoreResult.paymentHandoffEnabled,
+            contextAnalysis: validatedContext,
           ),
         ),
       );
@@ -253,6 +271,7 @@ class _PasteScreenState extends State<PasteScreen> {
           services: widget.services,
           payment: scenario.payment,
           assessment: scenario.assessment,
+          paymentHandoffEnabled: false,
           isDemo: true,
         ),
       ),

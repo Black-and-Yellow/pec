@@ -43,6 +43,9 @@ frontend/android/key.properties
 frontend/ios/Flutter/ephemeral/
 frontend/macos/Flutter/ephemeral/
 
+# Node browser tooling
+node_modules/
+
 # Editors and OS metadata
 .idea/
 .vscode/

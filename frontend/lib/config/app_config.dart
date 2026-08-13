@@ -21,10 +21,20 @@ abstract final class AppConfig {
           'API_BASE_URL must be an HTTP(S) origin or base path without credentials, a query, or a fragment.',
         );
       }
+      if (kReleaseMode && !kIsWeb && uri.scheme != 'https') {
+        throw const FormatException(
+          'Android release builds require an HTTPS API_BASE_URL.',
+        );
+      }
       return uri;
     }
     if (kIsWeb) {
       return Uri.base.resolve('/');
+    }
+    if (kReleaseMode) {
+      throw StateError(
+        'Android release builds require an explicit HTTPS API_BASE_URL.',
+      );
     }
     return Uri.parse('http://10.0.2.2:8000/');
   }

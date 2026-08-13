@@ -23,13 +23,15 @@ readonly TEMPLATE="${DEPLOY_DIR}/nginx/finguard-https.conf.template"
 readonly ACTIVE_CONFIG="/etc/nginx/sites-available/finguard"
 
 [[ -f "${TEMPLATE}" ]] || fail "missing HTTPS Nginx template"
+[[ -f "${DEPLOY_DIR}/scripts/https-config.sh" ]] || fail "missing HTTPS activation helper"
 [[ -f "${ACTIVE_CONFIG}" && ! -L "${ACTIVE_CONFIG}" ]] || fail "run setup-oci.sh first"
 [[ -x /etc/letsencrypt/renewal-hooks/deploy/finguard-reload-nginx ]] || \
   fail "Certbot renewal hook is missing; rerun setup-oci.sh"
 
 install -d -o root -g root -m 0755 /var/www/letsencrypt
 
-# The initial HTTP site serves this webroot, so Certbot does not need to edit Nginx.
+# The initial HTTP site serves only this ACME webroot, so Certbot does not need
+# to edit Nginx or expose the application before TLS is active.
 certbot certonly \
   --webroot \
   --webroot-path /var/www/letsencrypt \
@@ -43,29 +45,6 @@ certbot certonly \
 [[ -f "/etc/letsencrypt/live/${DOMAIN}/privkey.pem" ]] || fail "certificate key was not created"
 systemctl enable --now certbot.timer
 
-CANDIDATE="$(mktemp /etc/nginx/sites-available/finguard.https.XXXXXX)"
-BACKUP="$(mktemp /etc/nginx/sites-available/finguard.backup.XXXXXX)"
-
-cleanup() {
-  rm -f -- "${CANDIDATE}" "${BACKUP}"
-}
-trap cleanup EXIT
-
-sed "s/__FINGUARD_DOMAIN__/${DOMAIN}/g" "${TEMPLATE}" >"${CANDIDATE}"
-cp -- "${ACTIVE_CONFIG}" "${BACKUP}"
-install -o root -g root -m 0644 "${CANDIDATE}" "${ACTIVE_CONFIG}"
-
-if ! nginx -t; then
-  install -o root -g root -m 0644 "${BACKUP}" "${ACTIVE_CONFIG}"
-  nginx -t || true
-  fail "generated HTTPS configuration was invalid; restored the previous configuration"
-fi
-
-if ! systemctl reload nginx; then
-  install -o root -g root -m 0644 "${BACKUP}" "${ACTIVE_CONFIG}"
-  nginx -t || true
-  systemctl reload nginx || true
-  fail "Nginx reload failed; restored the previous configuration"
-fi
+bash "${DEPLOY_DIR}/scripts/https-config.sh" --domain "${DOMAIN}"
 
 printf 'HTTPS enabled for %s. Verify renewal with: sudo certbot renew --dry-run\n' "${DOMAIN}"

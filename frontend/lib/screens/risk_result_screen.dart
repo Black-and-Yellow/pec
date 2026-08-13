@@ -15,6 +15,7 @@ class RiskResultScreen extends StatefulWidget {
     required this.services,
     required this.payment,
     required this.assessment,
+    required this.paymentHandoffEnabled,
     super.key,
     this.contextAnalysis,
     this.isDemo = false,
@@ -23,6 +24,7 @@ class RiskResultScreen extends StatefulWidget {
   final AppServices services;
   final Payment payment;
   final RiskAssessment assessment;
+  final bool paymentHandoffEnabled;
   final ContextAnalysis? contextAnalysis;
   final bool isDemo;
 
@@ -48,6 +50,7 @@ class _RiskResultScreenState extends State<RiskResultScreen> {
     );
     final Widget actions = _ActionPanel(
       assessment: widget.assessment,
+      paymentHandoffEnabled: widget.paymentHandoffEnabled,
       preparingReport: _preparingReport,
       onStop: _stopHere,
       onContinue: _continue,
@@ -93,6 +96,9 @@ class _RiskResultScreenState extends State<RiskResultScreen> {
   }
 
   Future<void> _continue() async {
+    if (!widget.paymentHandoffEnabled) {
+      return;
+    }
     final RiskLevel level = widget.assessment.level;
     final bool confirmed = await confirmAction(
       context,
@@ -452,6 +458,7 @@ class _SignalRow extends StatelessWidget {
 class _ActionPanel extends StatelessWidget {
   const _ActionPanel({
     required this.assessment,
+    required this.paymentHandoffEnabled,
     required this.preparingReport,
     required this.onStop,
     required this.onContinue,
@@ -462,6 +469,7 @@ class _ActionPanel extends StatelessWidget {
   });
 
   final RiskAssessment assessment;
+  final bool paymentHandoffEnabled;
   final bool preparingReport;
   final VoidCallback onStop;
   final VoidCallback onContinue;
@@ -485,7 +493,9 @@ class _ActionPanel extends StatelessWidget {
             ),
             const SizedBox(height: 8),
             Text(
-              safe
+              !paymentHandoffEnabled
+                  ? 'Payment handoff is unavailable for saved and demo results. Run a fresh check before opening a UPI app.'
+                  : safe
                   ? 'FinGuard will hand the validated request to your UPI app. Review the recipient again there.'
                   : 'FinGuard has not opened a UPI app or initiated a payment.',
               style: Theme.of(
@@ -493,14 +503,37 @@ class _ActionPanel extends StatelessWidget {
               ).textTheme.bodyMedium?.copyWith(color: AppColors.inkMuted),
             ),
             const SizedBox(height: 18),
-            if (safe)
+            if (!paymentHandoffEnabled)
+              Container(
+                key: const Key('payment_handoff_unavailable'),
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: AppColors.surfaceMuted,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: AppColors.border),
+                ),
+                child: const Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Icon(Icons.lock_outline, size: 20),
+                    SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        'This result is view-only. No UPI app can be opened from it.',
+                      ),
+                    ),
+                  ],
+                ),
+              )
+            else if (safe)
               FilledButton.icon(
                 key: const Key('continue_upi_button'),
                 onPressed: onContinue,
                 icon: const Icon(Icons.open_in_new),
                 label: const Text('Continue to UPI app'),
-              )
-            else ...<Widget>[
+              ),
+            if (!safe) ...<Widget>[
+              if (!paymentHandoffEnabled) const SizedBox(height: 10),
               FilledButton.icon(
                 key: const Key('stop_here_button'),
                 style: assessment.level == RiskLevel.highRisk
@@ -537,11 +570,12 @@ class _ActionPanel extends StatelessWidget {
                 ),
                 const SizedBox(height: 6),
               ],
-              TextButton(
-                key: const Key('continue_anyway_button'),
-                onPressed: onContinue,
-                child: const Text('Continue anyway'),
-              ),
+              if (paymentHandoffEnabled)
+                TextButton(
+                  key: const Key('continue_anyway_button'),
+                  onPressed: onContinue,
+                  child: const Text('Continue anyway'),
+                ),
             ],
             const Divider(height: 30),
             TextButton.icon(

@@ -11,9 +11,16 @@ import 'package:finguard/services/auth_store.dart';
 import 'package:finguard/services/external_actions.dart';
 
 final class FakeApi implements FinGuardApi {
-  FakeApi({this.contextAvailable = true});
+  FakeApi({
+    this.contextAvailable = true,
+    this.contextError,
+    this.parsePaymentGate,
+  });
 
   final bool contextAvailable;
+  final ApiException? contextError;
+  final Future<void>? parsePaymentGate;
+  ContextAnalysis? lastScoreContext;
 
   @override
   Future<ContextAnalysis> analyzeContext({
@@ -21,24 +28,38 @@ final class FakeApi implements FinGuardApi {
     String? text,
     Uint8List? screenshotBytes,
     String? screenshotMimeType,
-  }) async => ContextAnalysis(
-    available: contextAvailable,
-    sourceText: text ?? '',
-    flags: const <String, bool>{'urgency': true},
-    confidence: 0.9,
-    source: contextAvailable
-        ? ContextAnalysisSource.gemini
-        : ContextAnalysisSource.localRules,
-  );
+  }) async {
+    final ApiException? error = contextError;
+    if (error != null) {
+      throw error;
+    }
+    return ContextAnalysis.fromJson(<String, Object?>{
+      'available': contextAvailable,
+      'source': contextAvailable ? 'gemini' : 'local_rules',
+      'context_token': 'test-server-context-token',
+      'context': <String, Object?>{
+        'impersonation': false,
+        'urgency': true,
+        'kyc_threat': false,
+        'reward_or_refund_claim': false,
+        'payment_requested': false,
+        'suspicious_support_claim': false,
+        'confidence': 0.9,
+      },
+    }, sourceText: text ?? '');
+  }
 
   @override
-  Future<Payment> parsePayment(String upiUri) async => Payment(
-    upiUri: upiUri,
-    payeeVpa: 'merchant@upi',
-    payeeName: 'Merchant',
-    amount: 100,
-    currency: 'INR',
-  );
+  Future<Payment> parsePayment(String upiUri) async {
+    await parsePaymentGate;
+    return Payment(
+      upiUri: upiUri,
+      payeeVpa: 'merchant@upi',
+      payeeName: 'Merchant',
+      amount: 100,
+      currency: 'INR',
+    );
+  }
 
   @override
   Future<String> prepareResponse({
@@ -49,23 +70,32 @@ final class FakeApi implements FinGuardApi {
   }) async => 'Prepared report for ${payment.payeeVpa}';
 
   @override
-  Future<RiskAssessment> scorePayment({
+  Future<RiskScoreResult> scorePayment({
     required Payment payment,
     required String deviceId,
     ContextAnalysis? context,
-  }) async => const RiskAssessment(
-    score: 10,
-    level: RiskLevel.safe,
-    signals: <RiskSignal>[
-      RiskSignal(
-        code: 'TEST',
-        label: 'Test signal',
-        weight: 10,
-        evidence: 'Fixture evidence',
-      ),
-    ],
-    recommendedAction: 'Verify and continue.',
-  );
+  }) async {
+    lastScoreContext = context;
+    return RiskScoreResult.fromApiJson(<String, Object?>{
+      'assessment_id': 'test-assessment-1',
+      'transaction_id': 'test-transaction-1',
+      'payment': payment.toApiJson(),
+      'score': 10,
+      'level': 'SAFE',
+      'signals': <Object?>[
+        <String, Object?>{
+          'code': 'TEST',
+          'label': 'Test signal',
+          'weight': 10,
+          'evidence': 'Fixture evidence',
+        },
+      ],
+      'recommended_action': 'Verify and continue.',
+      'requires_confirmation': false,
+      'handoff_policy': 'NORMAL',
+      'assessed_at': '2026-08-12T10:00:00Z',
+    }, requestedPayment: payment);
+  }
 }
 
 final class FakeExternalActions implements ExternalActions {
@@ -97,23 +127,52 @@ final class FakeExternalActions implements ExternalActions {
 }
 
 final class MemoryAuthStore implements AuthStore {
+  MemoryAuthStore({
+    this.failReadRefresh = false,
+    this.failReadGuest = false,
+    this.failSaveRefresh = false,
+    this.failSaveGuest = false,
+    this.failClear = false,
+  });
+
   String? refreshToken;
   bool guestMode = false;
+  final bool failReadRefresh;
+  final bool failReadGuest;
+  final bool failSaveRefresh;
+  final bool failSaveGuest;
+  final bool failClear;
 
   @override
   Future<void> clear() async {
+    if (failClear) {
+      throw StateError('secure storage clear failed');
+    }
     refreshToken = null;
     guestMode = false;
   }
 
   @override
-  Future<bool> readGuestMode() async => guestMode;
+  Future<bool> readGuestMode() async {
+    if (failReadGuest) {
+      throw StateError('secure storage guest read failed');
+    }
+    return guestMode;
+  }
 
   @override
-  Future<String?> readRefreshToken() async => refreshToken;
+  Future<String?> readRefreshToken() async {
+    if (failReadRefresh) {
+      throw StateError('secure storage token read failed');
+    }
+    return refreshToken;
+  }
 
   @override
   Future<void> saveGuestMode(bool value) async {
+    if (failSaveGuest) {
+      throw StateError('secure storage guest write failed');
+    }
     guestMode = value;
     if (value) {
       refreshToken = null;
@@ -122,15 +181,21 @@ final class MemoryAuthStore implements AuthStore {
 
   @override
   Future<void> saveRefreshToken(String value) async {
+    if (failSaveRefresh) {
+      throw StateError('secure storage token write failed');
+    }
     refreshToken = value;
     guestMode = false;
   }
 }
 
 final class FakeAuthApi implements FinGuardAuthApi {
+  FakeAuthApi({this.refreshError});
+
   int refreshCount = 0;
   int logoutCount = 0;
   int deleteCount = 0;
+  ApiException? refreshError;
 
   AuthSession get session => AuthSession(
     accessToken: 'a' * 120,
@@ -174,6 +239,10 @@ final class FakeAuthApi implements FinGuardAuthApi {
   @override
   Future<AuthSession> refresh(String refreshToken) async {
     refreshCount += 1;
+    final ApiException? error = refreshError;
+    if (error != null) {
+      throw error;
+    }
     return session;
   }
 

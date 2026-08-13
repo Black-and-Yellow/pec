@@ -15,8 +15,7 @@ def test_health_and_parse_contract(client: TestClient) -> None:
         "/api/v1/payments/parse",
         json={
             "upi_uri": (
-                "upi://pay?pa=coffee.corner%40okaxis&pn=Coffee%20Corner&"
-                "am=180.00&cu=INR&tn=Coffee"
+                "upi://pay?pa=coffee.corner%40okaxis&pn=Coffee%20Corner&am=180.00&cu=INR&tn=Coffee"
             )
         },
     )
@@ -27,9 +26,7 @@ def test_health_and_parse_contract(client: TestClient) -> None:
 
 
 def test_actionable_parse_error(client: TestClient) -> None:
-    response = client.post(
-        "/api/v1/payments/parse", json={"upi_uri": "upi://pay?am=100"}
-    )
+    response = client.post("/api/v1/payments/parse", json={"upi_uri": "upi://pay?am=100"})
     assert response.status_code == 422
     assert response.json()["error"] == {
         "code": "MISSING_VPA",
@@ -46,6 +43,25 @@ def test_framework_http_errors_use_the_safe_api_error_envelope(client: TestClien
     assert wrong_method.status_code == 405
     assert wrong_method.headers["allow"] == "POST"
     assert wrong_method.json()["error"]["code"] == "HTTP_405"
+
+
+def test_risk_score_requires_an_explicit_device_capability(client: TestClient) -> None:
+    schema = client.get("/openapi.json").json()
+    required_fields = schema["components"]["schemas"]["RiskScoreRequest"]["required"]
+    assert "device_id" in required_fields
+
+    payment = client.post(
+        "/api/v1/payments/parse",
+        json={"upi_uri": "upi://pay?pa=explicit.device%40upi&am=10&cu=INR"},
+    ).json()["payment"]
+    response = client.post("/api/v1/risk/score", json={"payment": payment})
+
+    assert response.status_code == 422
+    assert response.json()["error"]["code"] == "VALIDATION_ERROR"
+    assert any(
+        field["location"] == "body.device_id" and field["type"] == "missing"
+        for field in response.json()["error"]["fields"]
+    )
 
 
 def test_all_demo_scenarios_are_stable_and_repeatable(client: TestClient) -> None:
@@ -74,6 +90,7 @@ def test_all_demo_scenarios_are_stable_and_repeatable(client: TestClient) -> Non
                     "payment": parsed,
                     "device_id": scenario["device_id"],
                     "context": scenario["context"],
+                    "context_token": scenario["context_token"],
                 },
             )
             assert scored.status_code == 200, scored.text
@@ -87,15 +104,16 @@ def test_all_demo_scenarios_are_stable_and_repeatable(client: TestClient) -> Non
 
 def test_high_risk_response_requires_human_control(client: TestClient) -> None:
     scenario = client.get("/api/v1/demo/scenarios").json()["scenarios"][2]
-    payment = client.post(
-        "/api/v1/payments/parse", json={"upi_uri": scenario["upi_uri"]}
-    ).json()["payment"]
+    payment = client.post("/api/v1/payments/parse", json={"upi_uri": scenario["upi_uri"]}).json()[
+        "payment"
+    ]
     assessment = client.post(
         "/api/v1/risk/score",
         json={
             "payment": payment,
             "device_id": scenario["device_id"],
             "context": scenario["context"],
+            "context_token": scenario["context_token"],
         },
     ).json()
 
@@ -142,7 +160,7 @@ def test_history_contains_assessments_without_changing_completed_history(
     ).json()
     assert first["score"] == second["score"] == 33
 
-    history = client.get("/api/v1/history", params={"device_id": "history-device"})
+    history = client.get("/api/v1/history", headers={"X-FinGuard-Device-ID": "history-device"})
     assert history.status_code == 200
     assert history.json()["count"] == 2
     assert all(item["assessed_at"].endswith("Z") for item in history.json()["items"])
@@ -160,6 +178,21 @@ def test_context_without_key_is_graceful(client: TestClient) -> None:
     assert response.json()["available"] is False
     assert response.json()["status"] == "ai_disabled"
     assert response.json()["context"]["urgency"] is True
+    assert response.json()["context_token"]
+
+
+def test_source_none_context_response_has_no_integrity_token(client: TestClient) -> None:
+    response = client.post(
+        "/api/v1/context/analyze",
+        json={
+            "screenshot_base64": "iVBORw0KGgo=",
+            "screenshot_mime_type": "image/png",
+            "consent_to_external_ai": False,
+        },
+    )
+    assert response.status_code == 200
+    assert response.json()["source"] == "none"
+    assert "context_token" not in response.json()
 
 
 def test_validation_error_does_not_echo_sensitive_input(client: TestClient) -> None:

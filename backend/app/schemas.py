@@ -31,6 +31,10 @@ AssessmentId = Annotated[
         pattern=r"^[A-Za-z0-9][A-Za-z0-9-]{0,63}$",
     ),
 ]
+ContextToken = Annotated[
+    str,
+    StringConstraints(strip_whitespace=True, min_length=1, max_length=4_096),
+]
 
 
 class StrictModel(BaseModel):
@@ -70,8 +74,10 @@ class PaymentDetails(StrictModel):
     @field_validator("amount")
     @classmethod
     def require_currency_precision(cls, value: Decimal | None) -> Decimal | None:
-        if value is not None and value.as_tuple().exponent < -2:
-            raise ValueError("amount must have at most two decimal places")
+        if value is not None:
+            exponent = value.as_tuple().exponent
+            if isinstance(exponent, int) and exponent < -2:
+                raise ValueError("amount must have at most two decimal places")
         return value
 
     @field_validator("payee_name", "transaction_note", "transaction_reference")
@@ -79,9 +85,9 @@ class PaymentDetails(StrictModel):
     def reject_control_characters(cls, value: str | None) -> str | None:
         if value is None:
             return None
-        cleaned = " ".join(value.split())
-        if any(ord(character) < 32 for character in cleaned):
+        if any(ord(character) < 32 or ord(character) == 127 for character in value):
             raise ValueError("control characters are not allowed")
+        cleaned = " ".join(value.split())
         return cleaned or None
 
     @field_serializer("amount", when_used="json")
@@ -143,6 +149,7 @@ class ContextAnalyzeResponse(StrictModel):
     ]
     message: str
     context: ContextSignals
+    context_token: ContextToken | None = None
 
 
 class RiskSignal(StrictModel):
@@ -154,8 +161,9 @@ class RiskSignal(StrictModel):
 
 class RiskScoreRequest(StrictModel):
     payment: PaymentDetails
-    device_id: DeviceId = "demo-device"
+    device_id: DeviceId
     context: ContextSignals | None = None
+    context_token: ContextToken | None = None
 
     @field_validator("device_id")
     @classmethod
@@ -274,6 +282,7 @@ class DemoScenario(StrictModel):
     upi_uri: str
     device_id: DeviceId
     context: ContextSignals | None = None
+    context_token: ContextToken | None = None
     expected_level: RiskLevel
     expected_score: int = Field(ge=0, le=100)
 

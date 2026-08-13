@@ -14,6 +14,7 @@ from app.services.auth_service import AuthenticationError, AuthService
 if TYPE_CHECKING:
     from app.config import Settings
     from app.services.context_analyzer import ContextAnalyzer
+    from app.services.context_integrity import ContextIntegrityService
     from app.services.risk_engine import RiskEngine
 
 bearer_scheme = HTTPBearer(auto_error=False)
@@ -34,6 +35,10 @@ def get_risk_engine(request: Request) -> RiskEngine:
 
 def get_context_analyzer(request: Request) -> ContextAnalyzer:
     return request.app.state.context_analyzer
+
+
+def get_context_integrity(request: Request) -> ContextIntegrityService:
+    return request.app.state.context_integrity
 
 
 def get_auth_service(request: Request) -> AuthService:

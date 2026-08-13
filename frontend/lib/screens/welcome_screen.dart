@@ -158,7 +158,12 @@ class _WelcomeActions extends StatelessWidget {
           ),
           if (auth.error != null) ...<Widget>[
             const SizedBox(height: 16),
-            ErrorNotice(message: auth.error!, onRetry: auth.clearError),
+            ErrorNotice(
+              message: auth.error!,
+              onRetry: auth.canRetrySessionRestore
+                  ? () => auth.initialize()
+                  : auth.clearError,
+            ),
           ],
           const SizedBox(height: 22),
           FilledButton(

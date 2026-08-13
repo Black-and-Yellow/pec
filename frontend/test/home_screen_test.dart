@@ -3,6 +3,8 @@ import 'package:finguard/screens/home_screen.dart';
 import 'package:finguard/services/app_services.dart';
 import 'package:finguard/services/demo_repository.dart';
 import 'package:finguard/services/local_store.dart';
+import 'package:finguard/theme/app_theme.dart';
+import 'package:finguard/widgets/common.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -26,6 +28,14 @@ void main() {
     expect(find.text('Scan QR'), findsOneWidget);
     expect(find.text('Paste UPI Link'), findsOneWidget);
     expect(find.text('Check suspicious message'), findsOneWidget);
+    expect(find.byType(WorkspaceAction), findsNWidgets(3));
+    expect(find.byKey(const Key('scan_qr_button')), findsOneWidget);
+    expect(find.byKey(const Key('paste_upi_button')), findsOneWidget);
+    expect(find.byKey(const Key('message_check_button')), findsOneWidget);
+    expect(
+      Theme.of(tester.element(find.byType(AppBar))).appBarTheme.backgroundColor,
+      AppColors.chrome,
+    );
     expect(find.text('Reliable demo cases'), findsOneWidget);
     expect(find.textContaining('does not intercept'), findsOneWidget);
   });
@@ -53,6 +63,9 @@ void main() {
     expect(find.byKey(const Key('risk_score')), findsOneWidget);
     expect(find.text('99'), findsOneWidget);
     expect(find.text('SEEDED DEMO DATA'), findsOneWidget);
-    expect(find.text('Recipient matches a seeded scam indicator'), findsOneWidget);
+    expect(
+      find.text('Recipient matches a seeded scam indicator'),
+      findsOneWidget,
+    );
   });
 }

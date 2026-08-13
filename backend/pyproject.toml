@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=75"]
+requires = ["setuptools==80.9.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -8,23 +8,26 @@ version = "0.1.0"
 description = "Explainable pre-payment UPI risk API for FinGuard"
 requires-python = ">=3.11"
 dependencies = [
-  "email-validator>=2.2,<3",
-  "fastapi>=0.111,<1",
-  "google-auth>=2.38,<3",
-  "httpx>=0.27,<1",
-  "PyJWT>=2.10,<3",
-  "pydantic>=2.7,<3",
-  "pwdlib[argon2]>=0.2,<1",
-  "python-dotenv>=1.0,<2",
-  "requests>=2.32,<3",
-  "sqlalchemy>=2.0.31,<3",
-  "uvicorn>=0.30,<1",
+  "email-validator==2.3.0",
+  "fastapi==0.141.1",
+  "google-auth==2.56.3",
+  "httpx==0.28.1",
+  "PyJWT==2.13.0",
+  "pydantic==2.13.4",
+  "pwdlib[argon2]==0.3.0",
+  "python-dotenv==1.2.2",
+  "requests==2.34.2",
+  "sqlalchemy==2.0.51",
+  "uvicorn==0.52.1",
 ]
 
 [project.optional-dependencies]
 dev = [
-  "pytest>=8.3,<10",
-  "ruff>=0.9,<1",
+  "mypy==1.20.2",
+  "pip-audit==2.10.1",
+  "pytest==9.1.1",
+  "pytest-cov==7.1.0",
+  "ruff==0.16.2",
 ]
 
 [tool.setuptools.packages.find]
@@ -35,6 +38,21 @@ include = ["app*"]
 addopts = "-q"
 pythonpath = ["."]
 testpaths = ["tests"]
+
+[tool.coverage.run]
+branch = true
+source = ["app"]
+
+[tool.coverage.report]
+fail_under = 90
+show_missing = true
+
+[tool.mypy]
+check_untyped_defs = true
+disallow_untyped_defs = true
+python_version = "3.11"
+warn_redundant_casts = true
+warn_unused_ignores = true
 
 [tool.ruff]
 line-length = 100

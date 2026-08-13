@@ -33,7 +33,14 @@ class _ContextScreenState extends State<ContextScreen> {
   String? _screenshotName;
 
   @override
+  void initState() {
+    super.initState();
+    _controller.addListener(_invalidateEditedAnalysis);
+  }
+
+  @override
   void dispose() {
+    _controller.removeListener(_invalidateEditedAnalysis);
     _controller.dispose();
     super.dispose();
   }
@@ -165,7 +172,11 @@ class _ContextScreenState extends State<ContextScreen> {
               child: OutlinedButton.icon(
                 onPressed: _openPaymentCheck,
                 icon: const Icon(Icons.arrow_forward),
-                label: const Text('Check a UPI request with this context'),
+                label: Text(
+                  _analysis!.hasValidatedContext
+                      ? 'Check a UPI request with this context'
+                      : 'Check a UPI request without context',
+                ),
               ),
             ),
           ],
@@ -284,10 +295,18 @@ class _ContextScreenState extends State<ContextScreen> {
     Navigator.push<void>(
       context,
       MaterialPageRoute<void>(
-        builder: (BuildContext context) =>
-            PasteScreen(services: widget.services, contextAnalysis: analysis),
+        builder: (BuildContext context) => PasteScreen(
+          services: widget.services,
+          contextAnalysis: analysis.hasValidatedContext ? analysis : null,
+        ),
       ),
     );
+  }
+
+  void _invalidateEditedAnalysis() {
+    if (_analysis != null && mounted) {
+      setState(() => _analysis = null);
+    }
   }
 }
 
@@ -298,7 +317,10 @@ class _AnalysisResult extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final List<String> labels = analysis.detectedLabels;
+    final bool hasValidatedContext = analysis.hasValidatedContext;
+    final List<String> labels = hasValidatedContext
+        ? analysis.detectedLabels
+        : const <String>[];
     final bool usedGemini = analysis.source == ContextAnalysisSource.gemini;
     final bool usedLocalRules =
         analysis.source == ContextAnalysisSource.localRules;
@@ -332,7 +354,9 @@ class _AnalysisResult extends StatelessWidget {
             ),
             const SizedBox(height: 6),
             Text(
-              labels.isEmpty
+              !hasValidatedContext
+                  ? 'No validated context signal will be included in deterministic scoring.'
+                  : labels.isEmpty
                   ? 'No supported scam-language signal was confidently detected.'
                   : '${labels.length} signal${labels.length == 1 ? '' : 's'} detected. These become inputs to deterministic scoring.',
               style: Theme.of(
@@ -347,7 +371,7 @@ class _AnalysisResult extends StatelessWidget {
                 style: Theme.of(context).textTheme.bodySmall,
               ),
             ],
-            if (analysis.confidence != null) ...<Widget>[
+            if (hasValidatedContext && analysis.confidence != null) ...<Widget>[
               const SizedBox(height: 8),
               Text(
                 '${_confidenceLabel(analysis.confidence!)} extraction confidence',
@@ -374,7 +398,8 @@ class _AnalysisResult extends StatelessWidget {
                   ),
                 ),
             ],
-            if ((analysis.explanation ?? '').isNotEmpty) ...<Widget>[
+            if (hasValidatedContext &&
+                (analysis.explanation ?? '').isNotEmpty) ...<Widget>[
               const Divider(height: 28),
               Text(analysis.explanation!),
             ],

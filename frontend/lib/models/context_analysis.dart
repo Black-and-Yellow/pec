@@ -9,7 +9,22 @@ final class ContextAnalysis {
     this.source = ContextAnalysisSource.none,
     this.status,
     this.serviceMessage,
-  });
+  }) : integrityToken = null,
+       _integrityEligible = false;
+
+  const ContextAnalysis._fromServer({
+    required this.available,
+    required this.sourceText,
+    required this.flags,
+    required this.confidence,
+    required this.explanation,
+    required this.unavailableReason,
+    required this.source,
+    required this.status,
+    required this.serviceMessage,
+    required this.integrityToken,
+    required bool integrityEligible,
+  }) : _integrityEligible = integrityEligible;
 
   final bool available;
   final String sourceText;
@@ -20,6 +35,13 @@ final class ContextAnalysis {
   final ContextAnalysisSource source;
   final String? status;
   final String? serviceMessage;
+  final String? integrityToken;
+  final bool _integrityEligible;
+
+  bool get hasValidatedContext =>
+      _integrityEligible &&
+      source != ContextAnalysisSource.none &&
+      (integrityToken ?? '').isNotEmpty;
 
   List<String> get detectedLabels => flags.entries
       .where((MapEntry<String, bool> entry) => entry.value)
@@ -37,8 +59,11 @@ final class ContextAnalysis {
   }) {
     final Object? nested =
         json['context'] ?? json['analysis'] ?? json['signals'];
-    final Map<String, Object?> values = nested is Map<Object?, Object?>
-        ? nested.map(
+    final Map<Object?, Object?>? nestedMap = nested is Map<Object?, Object?>
+        ? nested
+        : null;
+    final Map<String, Object?> values = nestedMap != null
+        ? nestedMap.map(
             (Object? key, Object? value) => MapEntry(key.toString(), value),
           )
         : json;
@@ -50,7 +75,22 @@ final class ContextAnalysis {
       fallback: true,
     );
     final String? serviceMessage = _stringValue(json['message']);
-    return ContextAnalysis(
+    final ContextAnalysisSource source = _sourceValue(json['source']);
+    final String? integrityToken = _stringValue(json['context_token']);
+    final Object? rawConfidence = values['confidence'];
+    final Set<String> contextKeys = values.keys.toSet();
+    final bool hasStrictContextShape =
+        nestedMap != null &&
+        contextKeys.length == _knownFlags.length + 1 &&
+        contextKeys.contains('confidence') &&
+        _knownFlags.every(
+          (String key) => contextKeys.contains(key) && values[key] is bool,
+        ) &&
+        rawConfidence is num &&
+        rawConfidence.toDouble().isFinite &&
+        rawConfidence >= 0 &&
+        rawConfidence <= 1;
+    return ContextAnalysis._fromServer(
       available: available,
       sourceText: sourceText,
       flags: flags,
@@ -59,9 +99,14 @@ final class ContextAnalysis {
       unavailableReason: available
           ? _stringValue(json['unavailable_reason'])
           : _stringValue(json['unavailable_reason']) ?? serviceMessage,
-      source: _sourceValue(json['source']),
+      source: source,
       status: _stringValue(json['status']),
       serviceMessage: serviceMessage,
+      integrityToken: integrityToken,
+      integrityEligible:
+          source != ContextAnalysisSource.none &&
+          integrityToken != null &&
+          hasStrictContextShape,
     );
   }
 

@@ -14,7 +14,7 @@ abstract final class ReportBuilder {
       ..writeln('FinGuard incident summary')
       ..writeln('Prepared: ${occurredAt.toLocal().toIso8601String()}')
       ..writeln(
-        'Status: ${alreadyPaid ? 'Payment may have been completed' : 'Payment stopped before handoff'}',
+        'Status: ${alreadyPaid ? 'The user indicated that a payment may have occurred. FinGuard cannot verify payment status.' : 'FinGuard displayed a pre-payment warning. FinGuard cannot verify whether a payment occurred.'}',
       )
       ..writeln('Recipient: ${payment.recipientLabel} (${payment.payeeVpa})')
       ..writeln('Amount: ${payment.formattedAmount}')
@@ -26,7 +26,8 @@ abstract final class ReportBuilder {
     if ((payment.note ?? '').isNotEmpty) {
       report.writeln('Payment note: ${payment.note}');
     }
-    if (context != null && context.sourceText.isNotEmpty) {
+    if (context?.hasValidatedContext == true &&
+        context!.sourceText.isNotEmpty) {
       report
         ..writeln()
         ..writeln('Supplied message:')
@@ -55,11 +56,12 @@ abstract final class ReportBuilder {
     Payment payment,
     RiskAssessment assessment,
   ) =>
-      'I ${assessment.level == RiskLevel.highRisk ? 'stopped' : 'paused'} a suspicious '
-      'UPI payment to ${payment.payeeVpa}. FinGuard showed '
+      'FinGuard displayed a pre-payment warning for a UPI request to '
+      '${payment.payeeVpa}: '
       '${assessment.level.label} (${assessment.score}/100) with '
       '${assessment.signals.length} risk signal${assessment.signals.length == 1 ? '' : 's'}. '
-      'Please contact me before I continue.';
+      'FinGuard cannot verify whether any payment occurred. Please contact me '
+      'before I take further action.';
 
   static String _weight(int value) => value > 0 ? '+$value' : '$value';
 }

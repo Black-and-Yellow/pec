@@ -1,21 +1,23 @@
 import 'package:flutter/material.dart';
 
 abstract final class AppColors {
-  static const Color canvas = Color(0xFFFBF8F2);
+  static const Color canvas = Color(0xFFF6F8FA);
   static const Color surface = Color(0xFFFFFFFF);
-  static const Color surfaceMuted = Color(0xFFF1EEE7);
-  static const Color ink = Color(0xFF172522);
-  static const Color inkMuted = Color(0xFF55645F);
-  static const Color teal = Color(0xFF0B5C57);
-  static const Color tealDark = Color(0xFF073F3C);
-  static const Color tealSoft = Color(0xFFDCEDEA);
-  static const Color border = Color(0xFFD6DCD7);
-  static const Color safe = Color(0xFF236C45);
-  static const Color safeSurface = Color(0xFFE5F2E9);
-  static const Color caution = Color(0xFF8A5A00);
-  static const Color cautionSurface = Color(0xFFFFF0CE);
-  static const Color danger = Color(0xFFA62C2C);
-  static const Color dangerSurface = Color(0xFFFBE5E3);
+  static const Color surfaceMuted = Color(0xFFF6F8FA);
+  static const Color ink = Color(0xFF1F2328);
+  static const Color inkMuted = Color(0xFF59636E);
+  static const Color chrome = Color(0xFF24292F);
+  static const Color chromeMuted = Color(0xFFB6BEC8);
+  static const Color teal = Color(0xFF1F883D);
+  static const Color tealDark = Color(0xFF1A7F37);
+  static const Color tealSoft = Color(0xFFDAFBE1);
+  static const Color border = Color(0xFFD0D7DE);
+  static const Color safe = Color(0xFF1A7F37);
+  static const Color safeSurface = Color(0xFFDAFBE1);
+  static const Color caution = Color(0xFF9A6700);
+  static const Color cautionSurface = Color(0xFFFFF8C5);
+  static const Color danger = Color(0xFFCF222E);
+  static const Color dangerSurface = Color(0xFFFFEBE9);
 }
 
 abstract final class AppTheme {
@@ -32,8 +34,8 @@ abstract final class AppTheme {
       surface: AppColors.surface,
       onSurface: AppColors.ink,
       outline: AppColors.border,
-      outlineVariant: Color(0xFFE7E8E2),
-      shadow: Color(0x1A172522),
+      outlineVariant: Color(0xFFD8DEE4),
+      shadow: Color(0x1A1F2328),
     );
     final TextTheme textTheme = Typography.material2021().black.apply(
       bodyColor: AppColors.ink,
@@ -46,19 +48,19 @@ abstract final class AppTheme {
       scaffoldBackgroundColor: AppColors.canvas,
       textTheme: textTheme.copyWith(
         displaySmall: textTheme.displaySmall?.copyWith(
-          fontSize: 42,
-          height: 1.08,
-          fontWeight: FontWeight.w700,
-          letterSpacing: -1.2,
+          fontSize: 40,
+          height: 1.12,
+          fontWeight: FontWeight.w600,
+          letterSpacing: -1,
         ),
         headlineMedium: textTheme.headlineMedium?.copyWith(
-          fontSize: 30,
+          fontSize: 28,
           height: 1.15,
           fontWeight: FontWeight.w700,
           letterSpacing: -0.5,
         ),
         headlineSmall: textTheme.headlineSmall?.copyWith(
-          fontSize: 23,
+          fontSize: 22,
           height: 1.2,
           fontWeight: FontWeight.w700,
         ),
@@ -66,19 +68,20 @@ abstract final class AppTheme {
         titleMedium: textTheme.titleMedium?.copyWith(
           fontWeight: FontWeight.w600,
         ),
-        bodyLarge: textTheme.bodyLarge?.copyWith(fontSize: 17, height: 1.5),
-        bodyMedium: textTheme.bodyMedium?.copyWith(fontSize: 15, height: 1.45),
+        bodyLarge: textTheme.bodyLarge?.copyWith(fontSize: 16, height: 1.5),
+        bodyMedium: textTheme.bodyMedium?.copyWith(fontSize: 14, height: 1.45),
         labelLarge: textTheme.labelLarge?.copyWith(
           fontSize: 15,
           fontWeight: FontWeight.w700,
         ),
       ),
       appBarTheme: const AppBarTheme(
-        backgroundColor: AppColors.canvas,
-        foregroundColor: AppColors.ink,
+        backgroundColor: AppColors.chrome,
+        foregroundColor: Colors.white,
         surfaceTintColor: Colors.transparent,
         elevation: 0,
         centerTitle: false,
+        iconTheme: IconThemeData(color: AppColors.chromeMuted),
       ),
       dividerTheme: const DividerThemeData(
         color: AppColors.border,
@@ -90,7 +93,7 @@ abstract final class AppTheme {
         elevation: 0,
         margin: EdgeInsets.zero,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.all(Radius.circular(16)),
+          borderRadius: BorderRadius.all(Radius.circular(8)),
           side: BorderSide(color: AppColors.border),
         ),
       ),
@@ -98,9 +101,7 @@ abstract final class AppTheme {
         style: FilledButton.styleFrom(
           minimumSize: const Size(48, 52),
           padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 15),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(10),
-          ),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
         ),
       ),
       outlinedButtonTheme: OutlinedButtonThemeData(
@@ -108,9 +109,7 @@ abstract final class AppTheme {
           minimumSize: const Size(48, 52),
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
           side: const BorderSide(color: AppColors.border),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(10),
-          ),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
         ),
       ),
       textButtonTheme: TextButtonThemeData(
@@ -124,19 +123,19 @@ abstract final class AppTheme {
         fillColor: AppColors.surface,
         contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 15),
         border: OutlineInputBorder(
-          borderRadius: BorderRadius.all(Radius.circular(10)),
+          borderRadius: BorderRadius.all(Radius.circular(6)),
           borderSide: BorderSide(color: AppColors.border),
         ),
         enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.all(Radius.circular(10)),
+          borderRadius: BorderRadius.all(Radius.circular(6)),
           borderSide: BorderSide(color: AppColors.border),
         ),
         focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.all(Radius.circular(10)),
+          borderRadius: BorderRadius.all(Radius.circular(6)),
           borderSide: BorderSide(color: AppColors.teal, width: 2),
         ),
         errorBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.all(Radius.circular(10)),
+          borderRadius: BorderRadius.all(Radius.circular(6)),
           borderSide: BorderSide(color: AppColors.danger),
         ),
       ),
@@ -149,7 +148,7 @@ abstract final class AppTheme {
         backgroundColor: AppColors.surface,
         surfaceTintColor: Colors.transparent,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.all(Radius.circular(16)),
+          borderRadius: BorderRadius.all(Radius.circular(8)),
         ),
       ),
       focusColor: AppColors.tealSoft,

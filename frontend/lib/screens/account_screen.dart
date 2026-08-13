@@ -62,6 +62,10 @@ class _AccountScreenState extends State<AccountScreen> {
               ).textTheme.bodyLarge?.copyWith(color: AppColors.inkMuted),
             ),
             const SizedBox(height: 26),
+            if (_auth.error != null) ...<Widget>[
+              ErrorNotice(message: _auth.error!, onRetry: _auth.clearError),
+              const SizedBox(height: 20),
+            ],
             Card(
               child: Padding(
                 padding: const EdgeInsets.all(20),
@@ -91,13 +95,6 @@ class _AccountScreenState extends State<AccountScreen> {
               Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: <Widget>[
-                  if (_auth.error != null) ...<Widget>[
-                    ErrorNotice(
-                      message: _auth.error!,
-                      onRetry: _auth.clearError,
-                    ),
-                    const SizedBox(height: 12),
-                  ],
                   OutlinedButton.icon(
                     key: const Key('logout_button'),
                     onPressed: _auth.busy ? null : _signOut,

@@ -125,6 +125,16 @@ class _IncidentScreenState extends State<IncidentScreen> {
   );
 
   Future<void> _copy() async {
+    final bool confirmed = await confirmAction(
+      context,
+      title: 'Copy incident draft?',
+      message:
+          'This will copy the incident draft to your device clipboard. Review it before sharing it with anyone.',
+      confirmLabel: 'Copy to clipboard',
+    );
+    if (!confirmed || !mounted) {
+      return;
+    }
     await widget.services.externalActions.copyText(widget.report);
     if (!mounted) {
       return;

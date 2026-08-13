@@ -5,7 +5,8 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
-from app.api.dependencies import get_session
+from app.api.dependencies import get_session, get_settings
+from app.config import Settings
 from app.repositories.transaction_repository import TransactionRepository
 from app.schemas import PreparedResponse, ResponsePrepareRequest
 from app.services.response_builder import build_prepared_response
@@ -17,6 +18,7 @@ router = APIRouter(prefix="/response", tags=["response"])
 def prepare_response(
     request: ResponsePrepareRequest,
     session: Annotated[Session, Depends(get_session)],
+    settings: Annotated[Settings, Depends(get_settings)],
 ) -> PreparedResponse:
     assessment = request.assessment
     if assessment.assessment_id is None:
@@ -28,7 +30,10 @@ def prepare_response(
             },
         )
 
-    stored = TransactionRepository(session).get_assessment(assessment.assessment_id)
+    stored = TransactionRepository(session).get_assessment(
+        assessment.assessment_id,
+        retention_days=settings.assessment_retention_days,
+    )
     if stored is None:
         raise HTTPException(
             status_code=404,

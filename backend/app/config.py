@@ -17,7 +17,11 @@ GEMINI_MODEL_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
 LOG_LEVELS = frozenset({"DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"})
 MAX_CONFIGURED_SCREENSHOT_BYTES = 2_000_000
 MAX_ASSESSMENT_RETENTION_DAYS = 365
+MAX_CONFIGURED_ASSESSED_RECORDS_TOTAL = 100_000
+MAX_CONFIGURED_ASSESSED_RECORDS_PER_DEVICE = 1_000
+MAX_CONFIGURED_REGISTERED_USERS = 100_000
 DEVELOPMENT_AUTH_SECRET = "development-only-auth-secret-change-before-production"
+DOCUMENTED_AUTH_SECRET_PLACEHOLDER = "replace-with-at-least-32-random-characters"
 
 
 def _load_environment_files() -> None:
@@ -53,7 +57,7 @@ def _origins(value: str | None, *, environment: str) -> tuple[str, ...]:
     return origins
 
 
-def _validate_origins(origins: tuple[str, ...]) -> None:
+def _validate_origins(origins: tuple[str, ...], *, environment: str) -> None:
     for origin in origins:
         parsed = urlsplit(origin)
         try:
@@ -72,6 +76,8 @@ def _validate_origins(origins: tuple[str, ...]) -> None:
             or (port is not None and not 1 <= port <= 65_535)
         ):
             raise ValueError(f"ALLOWED_ORIGINS contains an invalid origin: {origin!r}")
+        if environment == "production" and parsed.scheme.lower() != "https":
+            raise ValueError("ALLOWED_ORIGINS must contain only HTTPS origins in production")
 
 
 @dataclass(frozen=True, slots=True)
@@ -86,13 +92,16 @@ class Settings:
     )
     gemini_api_key: str | None = None
     gemini_model: str = "gemini-2.5-flash-lite"
-    enable_ai_context: bool = True
+    enable_ai_context: bool = False
     gemini_timeout_seconds: float = 12.0
     max_screenshot_bytes: int = 2_000_000
     assessment_retention_days: int = 30
+    max_assessed_records_total: int = 5_000
+    max_assessed_records_per_device: int = 50
     auth_secret_key: str = DEVELOPMENT_AUTH_SECRET
     access_token_minutes: int = 15
     refresh_token_days: int = 30
+    max_registered_users: int = 5_000
     google_oauth_client_ids: tuple[str, ...] = ()
     log_level: str = "INFO"
 
@@ -103,9 +112,11 @@ class Settings:
             ("sqlite:", "sqlite+pysqlite:")
         ):
             raise ValueError("DATABASE_URL must be a SQLite URL")
-        _validate_origins(self.allowed_origins)
+        _validate_origins(self.allowed_origins, environment=self.app_env)
         if not GEMINI_MODEL_PATTERN.fullmatch(self.gemini_model):
             raise ValueError("GEMINI_MODEL contains unsupported characters")
+        if self.enable_ai_context and (not self.gemini_api_key or not self.gemini_api_key.strip()):
+            raise ValueError("GEMINI_API_KEY must be configured when ENABLE_AI_CONTEXT is true")
         if not math.isfinite(self.gemini_timeout_seconds) or not (
             1 <= self.gemini_timeout_seconds <= 60
         ):
@@ -116,17 +127,41 @@ class Settings:
             )
         if not 1 <= self.assessment_retention_days <= MAX_ASSESSMENT_RETENTION_DAYS:
             raise ValueError(
-                "ASSESSMENT_RETENTION_DAYS must be between 1 and "
-                f"{MAX_ASSESSMENT_RETENTION_DAYS}"
+                f"ASSESSMENT_RETENTION_DAYS must be between 1 and {MAX_ASSESSMENT_RETENTION_DAYS}"
             )
-        if len(self.auth_secret_key) < 32:
+        if not 1 <= self.max_assessed_records_total <= MAX_CONFIGURED_ASSESSED_RECORDS_TOTAL:
+            raise ValueError(
+                "MAX_ASSESSED_RECORDS_TOTAL must be between 1 and "
+                f"{MAX_CONFIGURED_ASSESSED_RECORDS_TOTAL}"
+            )
+        if not (
+            1 <= self.max_assessed_records_per_device <= MAX_CONFIGURED_ASSESSED_RECORDS_PER_DEVICE
+        ):
+            raise ValueError(
+                "MAX_ASSESSED_RECORDS_PER_DEVICE must be between 1 and "
+                f"{MAX_CONFIGURED_ASSESSED_RECORDS_PER_DEVICE}"
+            )
+        if self.max_assessed_records_per_device > self.max_assessed_records_total:
+            raise ValueError(
+                "MAX_ASSESSED_RECORDS_PER_DEVICE cannot exceed MAX_ASSESSED_RECORDS_TOTAL"
+            )
+        if len(self.auth_secret_key.strip()) < 32:
             raise ValueError("AUTH_SECRET_KEY must contain at least 32 characters")
-        if self.app_env == "production" and self.auth_secret_key == DEVELOPMENT_AUTH_SECRET:
-            raise ValueError("AUTH_SECRET_KEY must be explicitly configured in production")
+        if self.app_env == "production" and self.auth_secret_key in {
+            DEVELOPMENT_AUTH_SECRET,
+            DOCUMENTED_AUTH_SECRET_PLACEHOLDER,
+        }:
+            raise ValueError(
+                "AUTH_SECRET_KEY must replace every documented placeholder in production"
+            )
         if not 5 <= self.access_token_minutes <= 60:
             raise ValueError("ACCESS_TOKEN_MINUTES must be between 5 and 60")
         if not 1 <= self.refresh_token_days <= 90:
             raise ValueError("REFRESH_TOKEN_DAYS must be between 1 and 90")
+        if not 1 <= self.max_registered_users <= MAX_CONFIGURED_REGISTERED_USERS:
+            raise ValueError(
+                f"MAX_REGISTERED_USERS must be between 1 and {MAX_CONFIGURED_REGISTERED_USERS}"
+            )
         if any(
             not client_id.strip() or len(client_id) > 255
             for client_id in self.google_oauth_client_ids
@@ -146,13 +181,16 @@ class Settings:
             allowed_origins=_origins(os.getenv("ALLOWED_ORIGINS"), environment=environment),
             gemini_api_key=api_key,
             gemini_model=os.getenv("GEMINI_MODEL", "gemini-2.5-flash-lite").strip(),
-            enable_ai_context=_as_bool(os.getenv("ENABLE_AI_CONTEXT"), default=True),
+            enable_ai_context=_as_bool(os.getenv("ENABLE_AI_CONTEXT"), default=False),
             gemini_timeout_seconds=float(os.getenv("GEMINI_TIMEOUT_SECONDS", "12")),
             max_screenshot_bytes=int(os.getenv("MAX_SCREENSHOT_BYTES", "2000000")),
             assessment_retention_days=int(os.getenv("ASSESSMENT_RETENTION_DAYS", "30")),
-            auth_secret_key=os.getenv("AUTH_SECRET_KEY", DEVELOPMENT_AUTH_SECRET),
+            max_assessed_records_total=int(os.getenv("MAX_ASSESSED_RECORDS_TOTAL", "5000")),
+            max_assessed_records_per_device=int(os.getenv("MAX_ASSESSED_RECORDS_PER_DEVICE", "50")),
+            auth_secret_key=os.getenv("AUTH_SECRET_KEY", DEVELOPMENT_AUTH_SECRET).strip(),
             access_token_minutes=int(os.getenv("ACCESS_TOKEN_MINUTES", "15")),
             refresh_token_days=int(os.getenv("REFRESH_TOKEN_DAYS", "30")),
+            max_registered_users=int(os.getenv("MAX_REGISTERED_USERS", "5000")),
             google_oauth_client_ids=tuple(
                 client_id.strip()
                 for client_id in os.getenv("GOOGLE_OAUTH_CLIENT_IDS", "").split(",")

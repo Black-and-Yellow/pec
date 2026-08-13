@@ -3,7 +3,7 @@ from __future__ import annotations
 import base64
 import binascii
 import re
-from typing import Protocol
+from typing import Literal, Protocol
 
 from app.integrations.gemini_client import (
     GeminiMalformedResponse,
@@ -104,7 +104,9 @@ class ContextAnalyzer:
             maximum_bytes=self._maximum_screenshot_bytes,
         )
         local_context = local_text_analysis(request.text)
-        fallback_source = "local_rules" if request.text else "none"
+        fallback_source: Literal["local_rules", "none"] = (
+            "local_rules" if request.text else "none"
+        )
 
         if not request.consent_to_external_ai:
             return ContextAnalyzeResponse(

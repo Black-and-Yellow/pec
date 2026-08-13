@@ -51,6 +51,74 @@ final class Payment {
     ...toApiJson(),
   };
 
+  void requireMatchesOriginalUpiUri(Uri originalUpiUri) {
+    final Uri validatedOriginal = validateUpiUri(originalUpiUri.toString());
+    final Map<String, String> originalParameters = _normalizedParameters(
+      validatedOriginal,
+    );
+    if (payeeVpa.toLowerCase() !=
+        originalParameters['pa']!.trim().toLowerCase()) {
+      throw const FormatException(
+        'The parsed recipient does not match the original UPI request.',
+      );
+    }
+    _requireCanonicalAmountMatch(
+      parsedAmount: amount,
+      handoffAmount: _doubleValue(originalParameters['am']),
+    );
+    _requireCanonicalMatch(
+      field: 'payee name',
+      parsedValue: payeeName,
+      handoffValue: _normalizedOptionalText(originalParameters['pn']),
+    );
+    _requireCanonicalMatch(
+      field: 'payment note',
+      parsedValue: note,
+      handoffValue: _normalizedOptionalText(originalParameters['tn']),
+    );
+    final String originalCurrency =
+        (_stringValue(originalParameters['cu']) ?? 'INR').toUpperCase();
+    if (currency != originalCurrency) {
+      throw const FormatException(
+        'The parsed currency does not match the original UPI request.',
+      );
+    }
+    _requireCanonicalMatch(
+      field: 'transaction reference',
+      parsedValue: transactionReference,
+      handoffValue:
+          _normalizedOptionalText(originalParameters['tr']) ??
+          _normalizedOptionalText(originalParameters['tid']),
+    );
+  }
+
+  factory Payment.fromApiJson(
+    Map<String, Object?> json, {
+    required String canonicalUpiUri,
+  }) {
+    if (json.length != _apiFieldNames.length ||
+        !json.keys.every(_apiFieldNames.contains)) {
+      throw const FormatException(
+        'The payment response contained an invalid field set.',
+      );
+    }
+    _requireApiString(json['vpa'], maximumLength: 193);
+    _requireNullableApiString(json['payee_name'], maximumLength: 128);
+    final Object? amount = json['amount'];
+    if (amount != null && amount is! num) {
+      throw const FormatException(
+        'The payment response contained an invalid amount.',
+      );
+    }
+    _requireNullableApiString(json['transaction_note'], maximumLength: 250);
+    _requireApiString(json['currency'], maximumLength: 3);
+    _requireNullableApiString(
+      json['transaction_reference'],
+      maximumLength: 100,
+    );
+    return Payment.fromJson(json, canonicalUpiUri: canonicalUpiUri);
+  }
+
   factory Payment.fromJson(
     Map<String, Object?> json, {
     String? canonicalUpiUri,
@@ -171,13 +239,21 @@ final class Payment {
         'This UPI link contains unsupported address data.',
       );
     }
-    final Map<String, List<String>> parameters = uri.queryParametersAll;
-    if (parameters.values.any((List<String> values) => values.length != 1)) {
+    if (_malformedPercentEncoding.hasMatch(uri.query)) {
       throw const FormatException(
-        'This UPI link contains duplicate payment fields.',
+        'This UPI link contains malformed payment fields.',
       );
     }
-    final String vpa = (uri.queryParameters['pa'] ?? '').trim().toLowerCase();
+    final List<String> rawFields = uri.query.isEmpty
+        ? const <String>[]
+        : uri.query.split('&');
+    if (rawFields.length > 30) {
+      throw const FormatException(
+        'This UPI link contains too many payment fields.',
+      );
+    }
+    final Map<String, String> normalizedParameters = _normalizedParameters(uri);
+    final String vpa = (normalizedParameters['pa'] ?? '').trim().toLowerCase();
     if (vpa.isEmpty) {
       throw const FormatException(
         'This UPI link is missing the recipient address (pa).',
@@ -188,17 +264,12 @@ final class Payment {
         'This UPI link contains an invalid recipient address.',
       );
     }
-    final String? rawAmount = uri.queryParameters['am']?.trim();
+    final String? rawAmount = normalizedParameters['am']?.trim();
     if (rawAmount != null && rawAmount.isNotEmpty) {
-      final double? amount = double.tryParse(rawAmount);
-      final int decimals = rawAmount.contains('.')
-          ? rawAmount.length - rawAmount.lastIndexOf('.') - 1
-          : 0;
-      if (amount == null ||
-          !amount.isFinite ||
-          amount <= 0 ||
-          amount > 10000000 ||
-          decimals > 2) {
+      final double? amount = _amountPattern.hasMatch(rawAmount)
+          ? double.tryParse(rawAmount)
+          : null;
+      if (amount == null || amount <= 0 || amount > 10000000) {
         throw const FormatException(
           'This UPI link contains an invalid payment amount.',
         );
@@ -208,7 +279,9 @@ final class Payment {
         'This UPI link contains an empty payment amount.',
       );
     }
-    final String currency = (uri.queryParameters['cu'] ?? 'INR').toUpperCase();
+    final String currency = (normalizedParameters['cu'] ?? 'INR')
+        .trim()
+        .toUpperCase();
     if (currency != 'INR') {
       throw const FormatException(
         'FinGuard currently supports INR UPI requests only.',
@@ -220,6 +293,59 @@ final class Payment {
   static final RegExp _vpaPattern = RegExp(
     r'^[A-Za-z0-9][A-Za-z0-9._-]{0,127}@[A-Za-z0-9][A-Za-z0-9.-]{0,63}$',
   );
+  static final RegExp _amountPattern = RegExp(r'^\d{1,8}(?:\.\d{1,2})?$');
+  static final RegExp _malformedPercentEncoding = RegExp(
+    r'%(?![0-9A-Fa-f]{2})',
+  );
+  static const Set<String> _apiFieldNames = <String>{
+    'vpa',
+    'payee_name',
+    'amount',
+    'transaction_note',
+    'currency',
+    'transaction_reference',
+  };
+
+  static void _requireApiString(Object? value, {required int maximumLength}) {
+    if (value is! String ||
+        value.isEmpty ||
+        value.length > maximumLength ||
+        value != value.trim() ||
+        _containsControlCharacter(value)) {
+      throw const FormatException(
+        'The payment response contained an invalid text field.',
+      );
+    }
+  }
+
+  static void _requireNullableApiString(
+    Object? value, {
+    required int maximumLength,
+  }) {
+    if (value == null) {
+      return;
+    }
+    _requireApiString(value, maximumLength: maximumLength);
+  }
+
+  static bool _containsControlCharacter(String value) =>
+      value.codeUnits.any((int codeUnit) => codeUnit < 32 || codeUnit == 127);
+
+  static Map<String, String> _normalizedParameters(Uri uri) {
+    final Map<String, String> normalizedParameters = <String, String>{};
+    for (final MapEntry<String, List<String>> parameter
+        in uri.queryParametersAll.entries) {
+      final String normalizedKey = parameter.key.toLowerCase();
+      if (parameter.value.length != 1 ||
+          normalizedParameters.containsKey(normalizedKey)) {
+        throw const FormatException(
+          'This UPI link contains duplicate payment fields.',
+        );
+      }
+      normalizedParameters[normalizedKey] = parameter.value.single;
+    }
+    return normalizedParameters;
+  }
 
   static String? _stringValue(Object? value) {
     if (value == null) {
@@ -227,6 +353,14 @@ final class Payment {
     }
     final String text = value.toString().trim();
     return text.isEmpty ? null : text;
+  }
+
+  static String? _normalizedOptionalText(String? value) {
+    final String? text = _stringValue(value);
+    if (text == null) {
+      return null;
+    }
+    return text.split(RegExp(r'\s+')).join(' ');
   }
 
   static double? _doubleValue(Object? value) {

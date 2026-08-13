@@ -30,8 +30,8 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(
-      toolbarHeight: 72,
-      title: const FinGuardBrand(),
+      toolbarHeight: 60,
+      title: const FinGuardBrand(compact: true, inverse: true),
       actions: <Widget>[
         if (widget.services.auth != null)
           IconButton(
@@ -66,37 +66,35 @@ class _HomeScreenState extends State<HomeScreen> {
       ],
     ),
     body: PageBody(
+      maxWidth: 1120,
       child: LayoutBuilder(
         builder: (BuildContext context, BoxConstraints constraints) {
           final bool wide = constraints.maxWidth >= 760;
-          final Widget introduction = _Introduction(wide: wide);
           final Widget actions = _PrimaryActions(
             onScan: _openScanner,
             onPaste: _openPaste,
             onMessage: _openContext,
           );
+          final Widget demos = _DemoSection(
+            loadingId: _loadingDemoId,
+            onSelected: _openDemo,
+          );
           return Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
+              const _Introduction(),
+              const SizedBox(height: 28),
               if (wide)
                 Row(
-                  crossAxisAlignment: CrossAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: <Widget>[
-                    Expanded(flex: 6, child: introduction),
-                    const SizedBox(width: 54),
-                    Expanded(flex: 5, child: actions),
+                    Expanded(child: actions),
+                    const SizedBox(width: 24),
+                    SizedBox(width: 330, child: demos),
                   ],
                 )
-              else ...<Widget>[
-                introduction,
-                const SizedBox(height: 30),
-                actions,
-              ],
-              const SizedBox(height: 52),
-              _DemoSection(loadingId: _loadingDemoId, onSelected: _openDemo),
-              const SizedBox(height: 34),
-              const Divider(),
-              const SizedBox(height: 18),
+              else ...<Widget>[actions, const SizedBox(height: 32), demos],
+              const SizedBox(height: 30),
               const _BoundaryStatement(),
             ],
           );
@@ -105,51 +103,41 @@ class _HomeScreenState extends State<HomeScreen> {
     ),
   );
 
-  void _openScanner() {
-    unawaited(
-      Navigator.push<void>(
-        context,
-        MaterialPageRoute<void>(
-          builder: (BuildContext context) =>
-              ScannerScreen(services: widget.services),
-        ),
+  void _openScanner() => unawaited(
+    Navigator.push<void>(
+      context,
+      MaterialPageRoute<void>(
+        builder: (BuildContext context) =>
+            ScannerScreen(services: widget.services),
       ),
-    );
-  }
+    ),
+  );
 
-  void _openPaste() {
-    unawaited(
-      Navigator.push<void>(
-        context,
-        MaterialPageRoute<void>(
-          builder: (BuildContext context) =>
-              PasteScreen(services: widget.services),
-        ),
+  void _openPaste() => unawaited(
+    Navigator.push<void>(
+      context,
+      MaterialPageRoute<void>(
+        builder: (BuildContext context) =>
+            PasteScreen(services: widget.services),
       ),
-    );
-  }
+    ),
+  );
 
-  void _openContext() {
-    unawaited(
-      Navigator.push<void>(
-        context,
-        MaterialPageRoute<void>(
-          builder: (BuildContext context) =>
-              ContextScreen(services: widget.services),
-        ),
+  void _openContext() => unawaited(
+    Navigator.push<void>(
+      context,
+      MaterialPageRoute<void>(
+        builder: (BuildContext context) =>
+            ContextScreen(services: widget.services),
       ),
-    );
-  }
+    ),
+  );
 
   Future<void> _openDemo(String id) async {
-    if (_loadingDemoId != null) {
-      return;
-    }
+    if (_loadingDemoId != null) return;
     setState(() => _loadingDemoId = id);
     final DemoScenario scenario = await widget.services.demos.load(id);
-    if (!mounted) {
-      return;
-    }
+    if (!mounted) return;
     setState(() => _loadingDemoId = null);
     final DateTime now = DateTime.now();
     try {
@@ -165,9 +153,7 @@ class _HomeScreenState extends State<HomeScreen> {
     } on Object {
       // A browser that blocks local storage must not block the bundled demo.
     }
-    if (!mounted) {
-      return;
-    }
+    if (!mounted) return;
     await Navigator.push<void>(
       context,
       MaterialPageRoute<void>(
@@ -175,6 +161,7 @@ class _HomeScreenState extends State<HomeScreen> {
           services: widget.services,
           payment: scenario.payment,
           assessment: scenario.assessment,
+          paymentHandoffEnabled: false,
           isDemo: true,
         ),
       ),
@@ -183,9 +170,7 @@ class _HomeScreenState extends State<HomeScreen> {
 }
 
 class _Introduction extends StatelessWidget {
-  const _Introduction({required this.wide});
-
-  final bool wide;
+  const _Introduction();
 
   @override
   Widget build(BuildContext context) => Column(
@@ -195,65 +180,24 @@ class _Introduction extends StatelessWidget {
         'PRE-PAYMENT SAFETY',
         style: Theme.of(context).textTheme.labelLarge?.copyWith(
           color: AppColors.teal,
-          letterSpacing: 1.3,
+          letterSpacing: 1.2,
         ),
       ),
-      const SizedBox(height: 14),
+      const SizedBox(height: 10),
       Text(
-        'Detect risk.\nTrigger response.',
-        style: wide
-            ? Theme.of(context).textTheme.displaySmall
-            : Theme.of(context).textTheme.headlineMedium,
+        'Detect risk. Trigger response.',
+        style: Theme.of(context).textTheme.headlineMedium,
       ),
-      const SizedBox(height: 18),
-      Text(
-        'Check a QR code or UPI payment link, understand why it may be risky, and choose the safer next step before handoff.',
-        style: Theme.of(
-          context,
-        ).textTheme.bodyLarge?.copyWith(color: AppColors.inkMuted),
-      ),
-      const SizedBox(height: 22),
-      const Wrap(
-        spacing: 18,
-        runSpacing: 10,
-        children: <Widget>[
-          _Step(number: '1', label: 'Scan or paste'),
-          _Step(number: '2', label: 'Score explainably'),
-          _Step(number: '3', label: 'Respond'),
-        ],
-      ),
-    ],
-  );
-}
-
-class _Step extends StatelessWidget {
-  const _Step({required this.number, required this.label});
-
-  final String number;
-  final String label;
-
-  @override
-  Widget build(BuildContext context) => Row(
-    mainAxisSize: MainAxisSize.min,
-    children: <Widget>[
-      Container(
-        width: 26,
-        height: 26,
-        alignment: Alignment.center,
-        decoration: const BoxDecoration(
-          shape: BoxShape.circle,
-          color: AppColors.tealSoft,
-        ),
+      const SizedBox(height: 10),
+      ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 720),
         child: Text(
-          number,
-          style: Theme.of(context).textTheme.labelMedium?.copyWith(
-            color: AppColors.tealDark,
-            fontWeight: FontWeight.w700,
-          ),
+          'Check a QR code or UPI payment link, understand why it may be risky, and choose the safer next step before handoff.',
+          style: Theme.of(
+            context,
+          ).textTheme.bodyLarge?.copyWith(color: AppColors.inkMuted),
         ),
       ),
-      const SizedBox(width: 7),
-      Text(label, style: Theme.of(context).textTheme.bodyMedium),
     ],
   );
 }
@@ -270,46 +214,55 @@ class _PrimaryActions extends StatelessWidget {
   final VoidCallback onMessage;
 
   @override
-  Widget build(BuildContext context) => Card(
-    child: Padding(
-      padding: const EdgeInsets.all(22),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: <Widget>[
-          Text(
-            'Check a payment request',
-            style: Theme.of(context).textTheme.titleLarge,
+  Widget build(BuildContext context) => WorkspacePanel(
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: <Widget>[
+        Padding(
+          padding: const EdgeInsets.fromLTRB(20, 18, 20, 16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Text(
+                'Check a payment request',
+                style: Theme.of(context).textTheme.titleLarge,
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'FinGuard will show the recipient, score, reasons and recommended action.',
+                style: Theme.of(
+                  context,
+                ).textTheme.bodyMedium?.copyWith(color: AppColors.inkMuted),
+              ),
+            ],
           ),
-          const SizedBox(height: 8),
-          Text(
-            'FinGuard will show the recipient, score, reasons and recommended action.',
-            style: Theme.of(
-              context,
-            ).textTheme.bodyMedium?.copyWith(color: AppColors.inkMuted),
-          ),
-          const SizedBox(height: 22),
-          FilledButton.icon(
-            key: const Key('scan_qr_button'),
-            onPressed: onScan,
-            icon: const Icon(Icons.qr_code_scanner),
-            label: const Text('Scan QR'),
-          ),
-          const SizedBox(height: 12),
-          OutlinedButton.icon(
-            key: const Key('paste_upi_button'),
-            onPressed: onPaste,
-            icon: const Icon(Icons.link),
-            label: const Text('Paste UPI Link'),
-          ),
-          const SizedBox(height: 8),
-          TextButton.icon(
-            key: const Key('message_check_button'),
-            onPressed: onMessage,
-            icon: const Icon(Icons.message_outlined),
-            label: const Text('Check suspicious message'),
-          ),
-        ],
-      ),
+        ),
+        const Divider(height: 1),
+        WorkspaceAction(
+          key: const Key('scan_qr_button'),
+          icon: Icons.qr_code_scanner,
+          label: 'Scan QR',
+          description: 'Use the camera to inspect a payment code.',
+          emphasized: true,
+          onTap: onScan,
+        ),
+        const Divider(height: 1, indent: 68),
+        WorkspaceAction(
+          key: const Key('paste_upi_button'),
+          icon: Icons.link,
+          label: 'Paste UPI Link',
+          description: 'Review a copied UPI payment request.',
+          onTap: onPaste,
+        ),
+        const Divider(height: 1, indent: 68),
+        WorkspaceAction(
+          key: const Key('message_check_button'),
+          icon: Icons.message_outlined,
+          label: 'Check suspicious message',
+          description: 'Add context without changing the risk score.',
+          onTap: onMessage,
+        ),
+      ],
     ),
   );
 }
@@ -336,7 +289,7 @@ class _DemoSection extends StatelessWidget {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  'Clearly labelled seeded fixtures; results do not depend on AI or network availability.',
+                  'Seeded fixtures; no AI or network required.',
                   style: Theme.of(
                     context,
                   ).textTheme.bodyMedium?.copyWith(color: AppColors.inkMuted),
@@ -346,56 +299,35 @@ class _DemoSection extends StatelessWidget {
           ),
           if (loadingId != null)
             const SizedBox(
-              width: 22,
-              height: 22,
+              width: 20,
+              height: 20,
               child: CircularProgressIndicator(strokeWidth: 2.5),
             ),
         ],
       ),
-      const SizedBox(height: 18),
-      LayoutBuilder(
-        builder: (BuildContext context, BoxConstraints constraints) {
-          final bool wide = constraints.maxWidth >= 760;
-          final List<Widget> cards = DemoRepository.bundled
-              .map(
-                (DemoScenario scenario) => _DemoCard(
-                  scenario: scenario,
-                  enabled: loadingId == null,
-                  onTap: () => onSelected(scenario.id),
-                ),
+      const SizedBox(height: 14),
+      WorkspacePanel(
+        child: Column(
+          children: DemoRepository.bundled.indexed
+              .expand(
+                ((int, DemoScenario) item) => <Widget>[
+                  if (item.$1 > 0) const Divider(height: 1),
+                  _DemoRow(
+                    scenario: item.$2,
+                    enabled: loadingId == null,
+                    onTap: () => onSelected(item.$2.id),
+                  ),
+                ],
               )
-              .toList(growable: false);
-          if (!wide) {
-            return Column(
-              children: cards
-                  .expand(
-                    (Widget card) => <Widget>[card, const SizedBox(height: 12)],
-                  )
-                  .toList(growable: false),
-            );
-          }
-          return Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children:
-                cards
-                    .map((Widget card) => Expanded(child: card))
-                    .expand(
-                      (Widget card) => <Widget>[
-                        card,
-                        const SizedBox(width: 12),
-                      ],
-                    )
-                    .toList()
-                  ..removeLast(),
-          );
-        },
+              .toList(growable: false),
+        ),
       ),
     ],
   );
 }
 
-class _DemoCard extends StatelessWidget {
-  const _DemoCard({
+class _DemoRow extends StatelessWidget {
+  const _DemoRow({
     required this.scenario,
     required this.enabled,
     required this.onTap,
@@ -411,27 +343,41 @@ class _DemoCard extends StatelessWidget {
     enabled: enabled,
     label:
         '${scenario.title}, ${scenario.assessment.level.label}, ${scenario.subtitle}',
-    child: Card(
+    child: Material(
+      color: Colors.transparent,
       child: InkWell(
         onTap: enabled ? onTap : null,
-        borderRadius: BorderRadius.circular(16),
+        hoverColor: AppColors.surfaceMuted,
+        focusColor: AppColors.tealSoft,
         child: Padding(
-          padding: const EdgeInsets.all(17),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+          padding: const EdgeInsets.all(14),
+          child: Row(
             children: <Widget>[
-              RiskBadge(level: scenario.assessment.level),
-              const SizedBox(height: 16),
-              Text(
-                scenario.title,
-                style: Theme.of(context).textTheme.titleMedium,
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Text(
+                      scenario.title,
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      scenario.subtitle,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: AppColors.inkMuted,
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    RiskBadge(level: scenario.assessment.level),
+                  ],
+                ),
               ),
-              const SizedBox(height: 4),
-              Text(
-                scenario.subtitle,
-                style: Theme.of(
-                  context,
-                ).textTheme.bodySmall?.copyWith(color: AppColors.inkMuted),
+              const SizedBox(width: 8),
+              const Icon(
+                Icons.chevron_right,
+                size: 20,
+                color: AppColors.inkMuted,
               ),
             ],
           ),
@@ -445,20 +391,27 @@ class _BoundaryStatement extends StatelessWidget {
   const _BoundaryStatement();
 
   @override
-  Widget build(BuildContext context) => Row(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: <Widget>[
-      const Icon(Icons.info_outline, color: AppColors.inkMuted, size: 20),
-      const SizedBox(width: 10),
-      Expanded(
-        child: Text(
-          'FinGuard checks before handoff. It does not intercept, freeze, cancel or reverse transactions inside UPI apps.',
-          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-            color: AppColors.inkMuted,
-            height: 1.5,
+  Widget build(BuildContext context) => Container(
+    width: double.infinity,
+    padding: const EdgeInsets.symmetric(vertical: 16),
+    decoration: const BoxDecoration(
+      border: Border(top: BorderSide(color: AppColors.border)),
+    ),
+    child: Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        const Icon(Icons.info_outline, color: AppColors.inkMuted, size: 18),
+        const SizedBox(width: 9),
+        Expanded(
+          child: Text(
+            'FinGuard checks before handoff. It does not intercept, freeze, cancel or reverse transactions inside UPI apps.',
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: AppColors.inkMuted,
+              height: 1.5,
+            ),
           ),
         ),
-      ),
-    ],
+      ],
+    ),
   );
 }

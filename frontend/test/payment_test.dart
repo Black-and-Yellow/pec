@@ -41,6 +41,28 @@ void main() {
       expect(uri.queryParameters['pa'], 'merchant@upi');
     });
 
+    test('binds normalized text and blank tr fallback to the original URI', () {
+      const Payment payment = Payment(
+        upiUri:
+            'upi://pay?pa=merchant%40upi&pn=Merchant%20Name&am=45.50&cu=INR&tn=Order%20payment&tr=SECONDARY',
+        payeeVpa: 'merchant@upi',
+        payeeName: 'Merchant Name',
+        amount: 45.5,
+        note: 'Order payment',
+        currency: 'INR',
+        transactionReference: 'SECONDARY',
+      );
+
+      expect(
+        () => payment.requireMatchesOriginalUpiUri(
+          Uri.parse(
+            'upi://pay?pa=merchant%40upi&pn=%20Merchant++Name%20&am=45.50&cu=inr&tn=Order++payment&tr=&tid=SECONDARY',
+          ),
+        ),
+        returnsNormally,
+      );
+    });
+
     test(
       'rejects duplicate fields, unsupported currency and malformed amounts',
       () {
@@ -56,8 +78,44 @@ void main() {
           () => Payment.validateUpiUri('upi://pay?pa=merchant@upi&am=-10'),
           throwsFormatException,
         );
+        for (final String amount in <String>['1e3', '1.234', '000000001']) {
+          expect(
+            () =>
+                Payment.validateUpiUri('upi://pay?pa=merchant@upi&am=$amount'),
+            throwsFormatException,
+            reason: 'client handoff must reject non-canonical amount $amount',
+          );
+        }
       },
     );
+
+    test('rejects case-folded duplicates and oversized query sets', () {
+      expect(
+        () =>
+            Payment.validateUpiUri('upi://pay?pa=merchant@upi&PA=attacker@upi'),
+        throwsFormatException,
+      );
+
+      final String tooManyFields = <String>[
+        'pa=merchant@upi',
+        ...List<String>.generate(30, (int index) => 'x$index=value'),
+      ].join('&');
+      expect(
+        () => Payment.validateUpiUri('upi://pay?$tooManyFields'),
+        throwsFormatException,
+      );
+    });
+
+    test('rejects malformed percent encoding before URI handoff', () {
+      expect(
+        () => Payment.validateUpiUri('upi://pay?pa=merchant%ZZ@upi'),
+        throwsFormatException,
+      );
+      expect(
+        () => Payment.validateUpiUri('upi://pay?pa=merchant%@upi'),
+        throwsFormatException,
+      );
+    });
 
     test('uses a strict backend payment shape separate from local storage', () {
       const Payment payment = Payment(
@@ -92,10 +150,10 @@ void main() {
             const MapEntry<String, Object?>('transaction_reference', 'ORDER-2'),
           ]) {
         expect(
-          () => Payment.fromJson(
-            <String, Object?>{...valid, mismatch.key: mismatch.value},
-            canonicalUpiUri: canonical,
-          ),
+          () => Payment.fromJson(<String, Object?>{
+            ...valid,
+            mismatch.key: mismatch.value,
+          }, canonicalUpiUri: canonical),
           throwsFormatException,
           reason: '${mismatch.key} must be bound to the handoff URI',
         );

@@ -29,32 +29,39 @@ jobs:
 
     steps:
       - name: Check out tested revision
-        uses: actions/checkout@v5
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           ref: ${{ github.event.workflow_run.head_sha || github.sha }}
 
       - name: Set up Flutter
-        uses: subosito/flutter-action@v2
+        uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
         with:
+          flutter-version: "3.44.9"
           channel: stable
           cache: true
 
-      - name: Set up Python for manual deployment validation
-        if: github.event_name == 'workflow_dispatch'
-        uses: actions/setup-python@v6
+      - name: Set up Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
           python-version: "3.12"
           cache: pip
-          cache-dependency-path: backend/pyproject.toml
+          cache-dependency-path: |
+            backend/pyproject.toml
+            backend/constraints-production.txt
 
       - name: Validate backend for a manual deployment
         if: github.event_name == 'workflow_dispatch'
         working-directory: backend
         run: |
-          python -m pip install --disable-pip-version-check --editable ".[dev]"
+          python -m pip install --disable-pip-version-check \
+            --constraint constraints-production.txt \
+            --upgrade pip==26.2.1 \
+            --editable ".[dev]"
           python -m pip check
+          python -m pip_audit --local --progress-spinner off
           python -m ruff check .
-          python -m pytest
+          python -m mypy app
+          python -m pytest -p no:cacheprovider --cov=app --cov-branch --cov-report=term-missing
 
       - name: Build Flutter web
         working-directory: frontend
@@ -67,10 +74,114 @@ jobs:
           flutter build web --release \
             --dart-define="GOOGLE_WEB_CLIENT_ID=${{ vars.GOOGLE_WEB_CLIENT_ID }}"
 
+      - name: Build and prove complete ARM64 Python wheelhouse
+        run: |
+          set -Eeuo pipefail
+          python -m pip install --disable-pip-version-check --upgrade pip==26.2.1
+          install -d release/python-wheelhouse
+
+          python - <<'PY'
+          import re
+          import tomllib
+          from pathlib import Path
+
+          metadata = tomllib.loads(Path("backend/pyproject.toml").read_text(encoding="utf-8"))
+          requirements = [
+              *metadata["project"]["dependencies"],
+              *metadata["build-system"]["requires"],
+              "pip==26.2.1",
+          ]
+          exact_requirement = re.compile(
+              r"[A-Za-z0-9][A-Za-z0-9._-]*(?:\[[A-Za-z0-9._,-]+\])?"
+              r"==[A-Za-z0-9][A-Za-z0-9._+-]*"
+          )
+          if len(requirements) != len(set(requirements)):
+              raise SystemExit("duplicate ARM64 wheelhouse requirement")
+          if not all(exact_requirement.fullmatch(requirement) for requirement in requirements):
+              raise SystemExit("ARM64 wheelhouse requirements must be exact pins")
+          Path("release/python-wheelhouse/requirements.txt").write_text(
+              "\n".join(requirements) + "\n",
+              encoding="utf-8",
+              newline="\n",
+          )
+          PY
+
+          platform_args=()
+          for glibc_minor in {39..17}; do
+            platform_args+=(--platform "manylinux_2_${glibc_minor}_aarch64")
+          done
+          platform_args+=(--platform manylinux2014_aarch64)
+          target_args=(
+            "${platform_args[@]}"
+            --implementation cp
+            --python-version 3.12
+            --abi cp312
+            --abi abi3
+            --abi none
+          )
+
+          python -m pip download \
+            --dest release/python-wheelhouse \
+            --disable-pip-version-check \
+            --only-binary=:all: \
+            "${target_args[@]}" \
+            --constraint backend/constraints-production.txt \
+            --requirement release/python-wheelhouse/requirements.txt
+
+          wheel_count="$(find release/python-wheelhouse -maxdepth 1 -type f -name '*.whl' | wc -l)"
+          (( wheel_count >= 13 && wheel_count <= 128 )) || {
+            echo "ARM64 wheelhouse contains an invalid wheel count: ${wheel_count}" >&2
+            exit 1
+          }
+
+          # Resolve the same target entirely from the candidate wheelhouse. This
+          # reads wheel metadata but never imports or executes ARM64 wheel code.
+          proof_dir="$(mktemp -d "${RUNNER_TEMP}/finguard-wheelhouse-proof.XXXXXX")"
+          trap 'rm -rf -- "${proof_dir}"' EXIT
+          python -m pip download \
+            --dest "${proof_dir}" \
+            --disable-pip-version-check \
+            --no-index \
+            --find-links release/python-wheelhouse \
+            --only-binary=:all: \
+            "${target_args[@]}" \
+            --constraint backend/constraints-production.txt \
+            --requirement release/python-wheelhouse/requirements.txt
+          find release/python-wheelhouse -maxdepth 1 -type f -name '*.whl' -printf '%f\n' | sort \
+            >"${RUNNER_TEMP}/finguard-wheelhouse-expected.txt"
+          find "${proof_dir}" -maxdepth 1 -type f -name '*.whl' -printf '%f\n' | sort \
+            >"${RUNNER_TEMP}/finguard-wheelhouse-resolved.txt"
+          cmp --silent \
+            "${RUNNER_TEMP}/finguard-wheelhouse-expected.txt" \
+            "${RUNNER_TEMP}/finguard-wheelhouse-resolved.txt" || {
+              echo 'Offline ARM64 wheelhouse proof did not resolve the signed wheel set.' >&2
+              exit 1
+            }
+
+          (
+            cd release/python-wheelhouse
+            find . -maxdepth 1 -type f -name '*.whl' -printf '%f\0' | \
+              sort --zero-terminated | \
+              xargs --null sha256sum >SHA256SUMS
+            sha256sum --check --strict SHA256SUMS
+          )
+
       - name: Package release
         run: |
           set -Eeuo pipefail
           install -d release/backend release/web release/deploy
+          [[ "${GITHUB_RUN_NUMBER}" =~ ^[1-9][0-9]*$ ]] || {
+            echo 'GITHUB_RUN_NUMBER must be a positive canonical decimal sequence.' >&2
+            exit 1
+          }
+          release_commit="$(git rev-parse --verify HEAD^{commit})"
+          expected_commit="${{ github.event.workflow_run.head_sha || github.sha }}"
+          [[ "${expected_commit}" =~ ^[0-9a-f]{40}$ && "${release_commit}" == "${expected_commit}" ]] || {
+            echo 'Checked-out release commit does not match the requested GitHub commit.' >&2
+            exit 1
+          }
+          printf 'schema=finguard-release-metadata-v1\nsequence=%s\ncommit=%s\n' \
+            "${GITHUB_RUN_NUMBER}" "${release_commit}" >release/release-metadata
           rsync --archive \
             --exclude='.env' \
             --exclude='.pytest_cache/' \
@@ -84,46 +195,62 @@ jobs:
           rsync --archive deploy/ release/deploy/
           tar --create --gzip --file finguard-release.tgz --directory release .
 
-      - name: Configure SSH
+      - name: Configure release signing and SSH
         env:
+          RELEASE_SIGNING_KEY: ${{ secrets.RELEASE_SIGNING_KEY }}
           OCI_HOST: ${{ secrets.OCI_HOST }}
-          OCI_USER: ${{ secrets.OCI_USER }}
           OCI_SSH_KEY: ${{ secrets.OCI_SSH_KEY }}
           OCI_KNOWN_HOSTS: ${{ secrets.OCI_KNOWN_HOSTS }}
           OCI_PORT: ${{ secrets.OCI_PORT || '22' }}
-          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
         run: |
           set -Eeuo pipefail
+          [[ -n "${RELEASE_SIGNING_KEY}" ]] || { echo 'RELEASE_SIGNING_KEY is required' >&2; exit 1; }
           [[ -n "${OCI_HOST}" ]] || { echo 'OCI_HOST is required' >&2; exit 1; }
-          [[ -n "${OCI_USER}" ]] || { echo 'OCI_USER is required' >&2; exit 1; }
           [[ -n "${OCI_SSH_KEY}" ]] || { echo 'OCI_SSH_KEY is required' >&2; exit 1; }
           [[ -n "${OCI_KNOWN_HOSTS}" ]] || { echo 'OCI_KNOWN_HOSTS is required' >&2; exit 1; }
-          [[ -n "${DEPLOY_PATH}" ]] || { echo 'DEPLOY_PATH is required' >&2; exit 1; }
           [[ "${OCI_HOST}" =~ ^[A-Za-z0-9]([A-Za-z0-9.-]*[A-Za-z0-9])?$ && "${OCI_HOST}" != *..* ]] || { echo 'OCI_HOST must be a DNS name or IPv4 address' >&2; exit 1; }
-          [[ "${OCI_USER}" =~ ^[a-z_][a-z0-9_-]*$ ]] || { echo 'OCI_USER is invalid' >&2; exit 1; }
           [[ "${OCI_PORT}" =~ ^[0-9]+$ ]] && (( OCI_PORT >= 1 && OCI_PORT <= 65535 )) || { echo 'OCI_PORT is invalid' >&2; exit 1; }
-          [[ "${DEPLOY_PATH}" =~ ^/home/${OCI_USER}/[A-Za-z0-9._-]+(/[A-Za-z0-9._-]+)*$ ]] || { echo 'DEPLOY_PATH must be a directory below the SSH user home' >&2; exit 1; }
-          [[ "/${DEPLOY_PATH}/" != *'/../'* && "/${DEPLOY_PATH}/" != *'/./'* ]] || { echo 'DEPLOY_PATH must not contain dot path components' >&2; exit 1; }
-          [[ "${DEPLOY_PATH}" != */ ]] || { echo 'DEPLOY_PATH must not end with a slash' >&2; exit 1; }
 
           umask 077
+          SIGNING_KEY="${RUNNER_TEMP}/finguard_release_signing_key"
           install -d "${HOME}/.ssh"
+          printf '%s\n' "${RELEASE_SIGNING_KEY}" | tr -d '\r' >"${SIGNING_KEY}"
+          chmod 0600 "${SIGNING_KEY}"
           printf '%s\n' "${OCI_SSH_KEY}" | tr -d '\r' >"${HOME}/.ssh/finguard_deploy_key"
           chmod 0600 "${HOME}/.ssh/finguard_deploy_key"
-          ssh-keygen -y -P '' -f "${HOME}/.ssh/finguard_deploy_key" >/dev/null
+          signing_public_key="$(ssh-keygen -y -P '' -f "${SIGNING_KEY}")"
+          deploy_public_key="$(ssh-keygen -y -P '' -f "${HOME}/.ssh/finguard_deploy_key")"
+          [[ "${signing_public_key}" == 'ssh-ed25519 '* ]] || { echo 'RELEASE_SIGNING_KEY must be an unencrypted Ed25519 private key' >&2; exit 1; }
+          [[ "${deploy_public_key}" == 'ssh-ed25519 '* ]] || { echo 'OCI_SSH_KEY must be an unencrypted Ed25519 private key' >&2; exit 1; }
+          [[ "${signing_public_key}" != "${deploy_public_key}" ]] || { echo 'Release signing and SSH transport keys must be distinct' >&2; exit 1; }
           printf '%s\n' "${OCI_KNOWN_HOSTS}" | tr -d '\r' >"${HOME}/.ssh/known_hosts"
           chmod 0600 "${HOME}/.ssh/known_hosts"
           ssh-keygen -l -f "${HOME}/.ssh/known_hosts" >/dev/null
 
-      - name: Upload and activate release
-        env:
-          OCI_HOST: ${{ secrets.OCI_HOST }}
-          OCI_USER: ${{ secrets.OCI_USER }}
-          OCI_PORT: ${{ secrets.OCI_PORT || '22' }}
-          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+      - name: Sign release archive
         run: |
           set -Eeuo pipefail
+          SIGNING_KEY="${RUNNER_TEMP}/finguard_release_signing_key"
+          trap 'rm -f -- "${SIGNING_KEY}"' EXIT
+          [[ -f "${SIGNING_KEY}" && ! -L "${SIGNING_KEY}" ]] || { echo 'Release signing key is unavailable' >&2; exit 1; }
+          ssh-keygen -Y sign \
+            -f "${SIGNING_KEY}" \
+            -n finguard-release \
+            finguard-release.tgz
+          [[ -f finguard-release.tgz.sig && ! -L finguard-release.tgz.sig ]] || { echo 'Release signature was not created' >&2; exit 1; }
+          signature_size="$(stat --format='%s' -- finguard-release.tgz.sig)"
+          (( signature_size > 0 && signature_size <= 16384 )) || { echo 'Release signature size is invalid' >&2; exit 1; }
+
+      - name: Upload and activate release
+        env:
+          EXPECTED_RELEASE_COMMIT: ${{ github.event.workflow_run.head_sha || github.sha }}
+          OCI_HOST: ${{ secrets.OCI_HOST }}
+          OCI_PORT: ${{ secrets.OCI_PORT || '22' }}
+        run: |
+          set -Eeuo pipefail
+          readonly OCI_USER=finguard-deploy
           SSH_KEY="${HOME}/.ssh/finguard_deploy_key"
+          trap 'rm -f -- "${SSH_KEY}" "${HOME}/.ssh/known_hosts"' EXIT
           SSH_TARGET="${OCI_USER}@${OCI_HOST}"
           SSH_OPTIONS=(
             -p "${OCI_PORT}"
@@ -134,24 +261,25 @@ jobs:
             -o StrictHostKeyChecking=yes
             -o "UserKnownHostsFile=${HOME}/.ssh/known_hosts"
           )
-          SCP_OPTIONS=(
-            -P "${OCI_PORT}"
-            -i "${SSH_KEY}"
-            -o BatchMode=yes
-            -o ConnectTimeout=10
-            -o IdentitiesOnly=yes
-            -o StrictHostKeyChecking=yes
-            -o "UserKnownHostsFile=${HOME}/.ssh/known_hosts"
-          )
+          verify_current_main() {
+            local authorized_main_ref
+            if ! authorized_main_ref="$(git ls-remote --exit-code origin refs/heads/main)"; then
+              echo 'Unable to read the current authorized main revision.' >&2
+              return 1
+            fi
+            bash deploy/scripts/release-metadata.sh check-authorized-main \
+              "${EXPECTED_RELEASE_COMMIT}" "${authorized_main_ref}"
+          }
 
-          ssh "${SSH_OPTIONS[@]}" "${SSH_TARGET}" \
-            "install -d -m 0700 -- '${DEPLOY_PATH}'"
-          scp "${SCP_OPTIONS[@]}" \
-            finguard-release.tgz \
-            "${SSH_TARGET}:${DEPLOY_PATH}/finguard-release.tgz"
-          ssh "${SSH_OPTIONS[@]}" "${SSH_TARGET}" \
-            "sudo --non-interactive /usr/local/sbin/finguard-deploy-release '${DEPLOY_PATH}/finguard-release.tgz'"
+          verify_current_main
+          tar --create --file - -- finguard-release.tgz finguard-release.tgz.sig | \
+            ssh "${SSH_OPTIONS[@]}" \
+              "${SSH_TARGET}" finguard-deploy-activate-stream
 
-      - name: Remove ephemeral SSH material
+      - name: Remove ephemeral release and SSH key material
         if: always()
-        run: rm -f -- "${HOME}/.ssh/finguard_deploy_key" "${HOME}/.ssh/known_hosts"
+        run: |
+          rm -f -- \
+            "${RUNNER_TEMP}/finguard_release_signing_key" \
+            "${HOME}/.ssh/finguard_deploy_key" \
+            "${HOME}/.ssh/known_hosts"

@@ -12,7 +12,7 @@ import '../models/risk.dart';
 abstract interface class FinGuardApi {
   Future<Payment> parsePayment(String upiUri);
 
-  Future<RiskAssessment> scorePayment({
+  Future<RiskScoreResult> scorePayment({
     required Payment payment,
     required String deviceId,
     ContextAnalysis? context,
@@ -34,10 +34,20 @@ abstract interface class FinGuardApi {
 }
 
 final class ApiException implements Exception {
-  const ApiException(this.message, {this.retryable = false});
+  const ApiException(
+    this.message, {
+    this.retryable = false,
+    this.statusCode,
+    this.errorCode,
+  });
 
   final String message;
   final bool retryable;
+  final int? statusCode;
+  final String? errorCode;
+
+  bool get definitivelyRejectsSession =>
+      statusCode == 401 || errorCode == 'INVALID_SESSION';
 
   @override
   String toString() => message;
@@ -72,27 +82,34 @@ final class ApiService implements FinGuardApi {
     }
     final String canonicalUri = canonicalValue.trim();
     try {
-      return Payment.fromJson(paymentJson, canonicalUpiUri: canonicalUri);
+      final Payment payment = Payment.fromApiJson(
+        paymentJson,
+        canonicalUpiUri: canonicalUri,
+      );
+      payment.requireMatchesOriginalUpiUri(safeUri);
+      return payment;
     } on FormatException catch (error) {
       throw ApiException(error.message.toString());
     }
   }
 
   @override
-  Future<RiskAssessment> scorePayment({
+  Future<RiskScoreResult> scorePayment({
     required Payment payment,
     required String deviceId,
     ContextAnalysis? context,
   }) async {
+    final ContextAnalysis? validatedContext =
+        context?.hasValidatedContext == true ? context : null;
     final Map<String, Object?> json =
         await _post('api/v1/risk/score', <String, Object?>{
           'payment': payment.toApiJson(),
           'device_id': deviceId,
-          if (context != null) 'context': context.toApiJson(),
+          if (validatedContext != null) 'context': validatedContext.toApiJson(),
+          if (validatedContext != null)
+            'context_token': validatedContext.integrityToken!,
         });
-    final Map<String, Object?> assessmentJson =
-        _nestedMap(json, 'assessment') ?? _nestedMap(json, 'risk') ?? json;
-    return RiskAssessment.fromJson(assessmentJson);
+    return RiskScoreResult.fromApiJson(json, requestedPayment: payment);
   }
 
   @override
@@ -146,14 +163,16 @@ final class ApiService implements FinGuardApi {
     required bool alreadyPaid,
     ContextAnalysis? context,
   }) async {
+    final ContextAnalysis? validatedContext =
+        context?.hasValidatedContext == true ? context : null;
     final Map<String, Object?> json =
         await _post('api/v1/response/prepare', <String, Object?>{
           'payment': payment.toApiJson(),
           'assessment': assessment.toApiJson(),
           'already_paid': alreadyPaid,
-          if (context != null) 'context': context.toApiJson(),
-          if ((context?.sourceText ?? '').isNotEmpty)
-            'suspicious_message': context!.sourceText,
+          if (validatedContext != null) 'context': validatedContext.toApiJson(),
+          if ((validatedContext?.sourceText ?? '').isNotEmpty)
+            'suspicious_message': validatedContext!.sourceText,
         });
     final String report = _preparedReportText(json);
     if (report.isEmpty) {
@@ -182,6 +201,7 @@ final class ApiService implements FinGuardApi {
         throw ApiException(
           _errorMessage(decoded, response.statusCode),
           retryable: response.statusCode >= 500,
+          statusCode: response.statusCode,
         );
       }
       if (decoded is! Map<Object?, Object?>) {
