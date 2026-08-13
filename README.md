@@ -20,7 +20,7 @@ SCAN OR PASTE -> SCORE EXPLAINABLY -> RESPOND WITH USER CONFIRMATION
 - A deterministic 0-100 risk engine with centralized weights and thresholds.
 - Visible evidence for every score contribution.
 - SAFE, CAUTION, and HIGH RISK paths with deliberate confirmation before risky handoff.
-- An offline Risk Lab for comparing the three deterministic judge cases without API, AI, or payment-app access.
+- A guided 90-second offline Risk Lab with an outcome spectrum for comparing the three deterministic judge cases without API, AI, or payment-app access.
 - A three-step independent-verification checklist before any live CAUTION or HIGH RISK handoff can continue.
 - Protective actions, an "already paid" recovery flow, incident draft copy, the official Indian cybercrime route, and native trusted-contact sharing.
 - Optional Gemini text/image context extraction with explicit consent, strict structured output, and local-rule fallback.
@@ -212,7 +212,7 @@ Every scoring transaction deletes expired `ASSESSED` records and prunes the olde
 | Marketplace seller, first-time payee, INR 4,500 | First-time recipient + unusual amount | `CAUTION 33/100` |
 | Fake KYC request, seeded VPA, INR 25,000 | Seed match + relationships + amount + KYC/urgency | `HIGH RISK 99/100` |
 
-The Flutter client includes matching bundled fixtures so the three judge cases remain usable if the network or Gemini is unavailable. Its Risk Lab compares their payment facts, scores, and evidence, then opens only a view-only demo result with payment, report, share, and already-paid actions suppressed. Seeded data is always labelled as demo data and is never presented as live bank, NPCI, or national fraud intelligence.
+The Flutter client includes matching bundled fixtures so the three judge cases remain usable if the network or Gemini is unavailable. Its guided Risk Lab moves through SAFE, CAUTION, and HIGH RISK on a selectable outcome spectrum, compares payment facts, scores, and evidence, then opens only a view-only demo result with payment, report, share, and already-paid actions suppressed. Seeded data is always labelled as demo data and is never presented as live bank, NPCI, or national fraud intelligence.
 
 ## Verification
 

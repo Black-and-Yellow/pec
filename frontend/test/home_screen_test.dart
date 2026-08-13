@@ -39,6 +39,7 @@ void main() {
     );
     expect(find.text('Reliable demo cases'), findsOneWidget);
     expect(find.byKey(const Key('open_risk_lab_button')), findsOneWidget);
+    expect(find.text('Start 90-second demo'), findsOneWidget);
     expect(find.textContaining('does not intercept'), findsOneWidget);
   });
 

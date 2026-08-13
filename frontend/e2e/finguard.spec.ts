@@ -133,16 +133,21 @@ for (const riskCase of riskCases) {
   });
 }
 
-test('offline Risk Lab compares outcomes responsively and stays view-only', async ({ page }) => {
+test('guided offline Risk Lab compares outcomes responsively and stays view-only', async ({ page }) => {
   const diagnostics = observe(page);
   await openAsGuest(page);
-  await page.getByRole('button', { name: 'Compare in Risk Lab' }).click();
+  await page.getByRole('button', { name: 'Start 90-second demo' }).click();
   await expect(page.getByText('Compare policy evidence')).toBeVisible();
   await expect(page.getByText(/never call the API, AI or a UPI app/i)).toBeVisible();
+  await expect(page.getByText('Case 1 of 3')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Previous' })).toBeDisabled();
 
-  await page.getByRole('button', {
-    name: /Fake KYC request, HIGH RISK, score 99 of 100/,
-  }).click();
+  const next = page.getByRole('button', { name: 'Next' });
+  await next.click();
+  await expect(page.getByText('Case 2 of 3')).toBeVisible();
+  await next.click();
+  await expect(page.getByText('Case 3 of 3')).toBeVisible();
+  await expect(next).toBeDisabled();
   await expect(page.getByText('Recipient matches a seeded scam indicator')).toBeVisible();
   await page.screenshot({
     path: path.join(visualQaRoot, 'risk-lab-1440.png'),

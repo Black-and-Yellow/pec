@@ -10,54 +10,106 @@ import 'package:flutter_test/flutter_test.dart';
 import 'support/fakes.dart';
 
 void main() {
-  testWidgets('compares bundled outcomes and opens a view-only result', (
+  testWidgets('guides SAFE to CAUTION to HIGH with bounded controls', (
     WidgetTester tester,
   ) async {
-    final FakeExternalActions externalActions = FakeExternalActions();
-    final AppServices services = AppServices(
-      api: FakeApi(),
-      store: MemoryLocalStore(),
-      externalActions: externalActions,
-      demos: const DemoRepository(),
-    );
-
-    await tester.pumpWidget(
-      MaterialApp(
-        theme: AppTheme.light,
-        home: RiskLabScreen(services: services),
-      ),
-    );
+    await _pumpRiskLab(tester);
 
     expect(find.byKey(const Key('risk_lab_screen')), findsOneWidget);
     expect(find.text('OFFLINE SHOWCASE'), findsOneWidget);
     expect(find.textContaining('never call the API'), findsOneWidget);
     expect(find.text('SAFE'), findsWidgets);
-    expect(find.byKey(const Key('risk_lab_score')), findsOneWidget);
-    expect(find.text('0'), findsWidgets);
+    expect(_score(tester), '0');
+    expect(find.text('Case 1 of 3'), findsOneWidget);
+    expect(_previousButton(tester).onPressed, isNull);
+    expect(_nextButton(tester).onPressed, isNotNull);
     expect(
       find.text('The bundled policy outcome contains no risk-raising signals.'),
       findsOneWidget,
     );
 
-    await tester.tap(find.byKey(const Key('risk_lab_case_marketplace-seller')));
+    await tester.tap(find.byKey(const Key('risk_lab_next_case')));
     await tester.pumpAndSettle();
 
     expect(find.text('CAUTION'), findsWidgets);
-    expect(find.text('33'), findsWidgets);
+    expect(_score(tester), '33');
+    expect(find.text('Case 2 of 3'), findsOneWidget);
+    expect(_previousButton(tester).onPressed, isNotNull);
+    expect(_nextButton(tester).onPressed, isNotNull);
     expect(
       find.text('This is a first-time recipient on this device'),
       findsOneWidget,
     );
 
-    await tester.tap(find.byKey(const Key('risk_lab_case_fake-kyc')));
+    await tester.tap(find.byKey(const Key('risk_lab_next_case')));
     await tester.pumpAndSettle();
 
     expect(find.text('HIGH RISK'), findsWidgets);
-    expect(find.text('99'), findsWidgets);
+    expect(_score(tester), '99');
+    expect(find.text('Case 3 of 3'), findsOneWidget);
+    expect(_previousButton(tester).onPressed, isNotNull);
+    expect(_nextButton(tester).onPressed, isNull);
     expect(
       find.text('Recipient matches a seeded scam indicator'),
       findsOneWidget,
     );
+
+    await tester.tap(find.byKey(const Key('risk_lab_previous_case')));
+    await tester.pumpAndSettle();
+
+    expect(_score(tester), '33');
+    expect(find.text('Case 2 of 3'), findsOneWidget);
+  });
+
+  testWidgets('spectrum markers select the existing bundled outcomes', (
+    WidgetTester tester,
+  ) async {
+    final SemanticsHandle semantics = tester.ensureSemantics();
+    await _pumpRiskLab(tester);
+
+    expect(
+      tester.getSemantics(
+        find.byKey(const Key('risk_lab_spectrum_coffee-shop')),
+      ),
+      matchesSemantics(
+        label: 'Select Coffee-shop QR, SAFE, score 0 of 100',
+        isButton: true,
+        hasSelectedState: true,
+        isSelected: true,
+        hasTapAction: true,
+      ),
+    );
+
+    await tester.tap(
+      find.byKey(const Key('risk_lab_spectrum_marketplace-seller')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(_score(tester), '33');
+    expect(find.text('Case 2 of 3'), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('risk_lab_spectrum_fake-kyc')));
+    await tester.pumpAndSettle();
+
+    expect(_score(tester), '99');
+    expect(find.text('Case 3 of 3'), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('risk_lab_spectrum_coffee-shop')));
+    await tester.pumpAndSettle();
+
+    expect(_score(tester), '0');
+    expect(find.text('Case 1 of 3'), findsOneWidget);
+    semantics.dispose();
+  });
+
+  testWidgets('guided demo drill-down remains strictly view-only', (
+    WidgetTester tester,
+  ) async {
+    final FakeExternalActions externalActions = FakeExternalActions();
+    await _pumpRiskLab(tester, externalActions: externalActions);
+
+    await tester.tap(find.byKey(const Key('risk_lab_spectrum_fake-kyc')));
+    await tester.pumpAndSettle();
 
     final Finder openResult = find.byKey(const Key('risk_lab_open_result'));
     await tester.scrollUntilVisible(
@@ -82,4 +134,71 @@ void main() {
     expect(externalActions.upiOpenCount, 0);
     expect(externalActions.shareCount, 0);
   });
+
+  testWidgets('guided controls fit a narrow large-text viewport', (
+    WidgetTester tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(320, 800));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await _pumpRiskLab(tester, textScaler: const TextScaler.linear(2));
+
+    expect(find.byKey(const Key('risk_lab_case_progress')), findsOneWidget);
+    expect(
+      find.byKey(const Key('risk_lab_spectrum_coffee-shop')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const Key('risk_lab_spectrum_marketplace-seller')),
+      findsOneWidget,
+    );
+    expect(find.byKey(const Key('risk_lab_spectrum_fake-kyc')), findsOneWidget);
+    final Finder next = find.byKey(const Key('risk_lab_next_case'));
+    await tester.ensureVisible(next);
+    await tester.pumpAndSettle();
+    await tester.tap(next);
+    await tester.pumpAndSettle();
+    expect(find.text('Case 2 of 3'), findsOneWidget);
+    await tester.ensureVisible(next);
+    await tester.pumpAndSettle();
+    await tester.tap(next);
+    await tester.pumpAndSettle();
+    expect(find.text('Case 3 of 3'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
 }
+
+Future<void> _pumpRiskLab(
+  WidgetTester tester, {
+  FakeExternalActions? externalActions,
+  TextScaler? textScaler,
+}) async {
+  final AppServices services = AppServices(
+    api: FakeApi(),
+    store: MemoryLocalStore(),
+    externalActions: externalActions ?? FakeExternalActions(),
+    demos: const DemoRepository(),
+  );
+
+  await tester.pumpWidget(
+    MaterialApp(
+      theme: AppTheme.light,
+      builder: textScaler == null
+          ? null
+          : (BuildContext context, Widget? child) => MediaQuery(
+              data: MediaQuery.of(context).copyWith(textScaler: textScaler),
+              child: child!,
+            ),
+      home: RiskLabScreen(services: services),
+    ),
+  );
+}
+
+String? _score(WidgetTester tester) =>
+    tester.widget<Text>(find.byKey(const Key('risk_lab_score'))).data;
+
+OutlinedButton _previousButton(WidgetTester tester) => tester
+    .widget<OutlinedButton>(find.byKey(const Key('risk_lab_previous_case')));
+
+OutlinedButton _nextButton(WidgetTester tester) =>
+    tester.widget<OutlinedButton>(find.byKey(const Key('risk_lab_next_case')));

@@ -346,7 +346,7 @@ class _DemoSection extends StatelessWidget {
           key: const Key('open_risk_lab_button'),
           onPressed: loadingId == null ? onCompare : null,
           icon: const Icon(Icons.science_outlined),
-          label: const Text('Compare in Risk Lab'),
+          label: const Text('Start 90-second demo'),
         ),
       ),
     ],
