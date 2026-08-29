@@ -83,10 +83,11 @@ def score_payment(
     # Read the payee's standing before this check is folded into it, so a
     # payer's own first look at an address can never be the evidence that the
     # address is well established.
+    snapshot = reputation.snapshot(request.payment.vpa)
     payee_trust = TrustScorer().score(
         TrustInputs(
             vpa=request.payment.vpa,
-            reputation=reputation.snapshot(request.payment.vpa),
+            reputation=snapshot,
             seeded_indicator_label=indicator.label if indicator is not None else None,
         )
     )
@@ -100,6 +101,7 @@ def score_payment(
             environment=request.environment,
             qr_provenance=request.qr_provenance,
             payee_trust=payee_trust,
+            reputation=snapshot,
         )
     )
     reputation.observe_check(

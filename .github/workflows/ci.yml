@@ -116,9 +116,38 @@ jobs:
           FINGUARD_ALLOW_DEMO_RELEASE: "true"
         run: flutter build apk --release --dart-define=API_BASE_URL=https://example.invalid/
 
-      # An installable artifact for testing on a real handset. It is a debug
-      # build on purpose: the release build refuses a non-HTTPS API, and a
-      # phone pointed at a laptop on the same Wi-Fi has no certificate.
+  # A handset-installable build that does not sit behind the quality gates.
+  #
+  # The job above deliberately refuses to publish an APK for code that fails
+  # analysis, and that is the right default for the branch. It is the wrong
+  # default for a person who needs something to install on a phone tonight: a
+  # single analyzer complaint would otherwise leave them with no artifact and
+  # no obvious reason why. This job answers only the question "does it build",
+  # so a red analyze run and a working test APK can coexist.
+  test-apk:
+    name: Installable test APK
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
+        with:
+          flutter-version: "3.44.9"
+          channel: stable
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      # Debug on purpose: the release build refuses a non-HTTPS API, and a
+      # phone talking to a laptop over Wi-Fi has no certificate to offer.
       - name: Build installable test APK
         run: flutter build apk --debug --dart-define=API_BASE_URL="${DEVICE_API_BASE_URL}"
         env:

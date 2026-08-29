@@ -10,6 +10,8 @@ abstract interface class ExternalActions {
 
   Future<void> openCybercrimePortal();
 
+  Future<void> openSuspectRegistry();
+
   Future<void> shareTrustedContact(String message, {Rect? origin});
 
   Future<void> messageTrustedContact(String phoneDigits, String message);
@@ -43,6 +45,20 @@ final class PlatformExternalActions implements ExternalActions {
     if (!opened) {
       throw const ExternalActionException(
         'The official cybercrime portal could not be opened.',
+      );
+    }
+  }
+
+  @override
+  Future<void> openSuspectRegistry() async {
+    final bool opened = await launchUrl(
+      AppConfig.suspectRegistry,
+      mode: LaunchMode.externalApplication,
+    );
+    if (!opened) {
+      throw const ExternalActionException(
+        'The government suspect registry could not be opened. You can reach it '
+        'from cybercrime.gov.in under "Report & Check Suspect".',
       );
     }
   }

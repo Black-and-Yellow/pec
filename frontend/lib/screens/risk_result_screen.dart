@@ -126,6 +126,17 @@ class _RiskResultScreenState extends State<RiskResultScreen> {
 
   bool get _coolOffComplete => !_requiresCoolOff || _coolOffRemaining == 0;
 
+  /// Whether this result gives the user a reason to consult the national
+  /// register: an adverse payee grade, a mule-shaped ledger, or a top-band
+  /// verdict. A safe result does not, and offering it there would dilute the
+  /// prompt everywhere it matters.
+  bool get _warrantsRegistryCheck =>
+      (widget.payeeTrust?.isAdverse ?? false) ||
+      widget.assessment.level == RiskLevel.highRisk ||
+      widget.assessment.signals.any(
+        (RiskSignal signal) => signal.code == 'MULE_ACCOUNT_SIGNATURE',
+      );
+
   /// The name the request claims, when the server has told us it is a claim.
   ///
   /// The signal is what licenses the card: FinGuard cannot read the bank's
@@ -173,6 +184,18 @@ class _RiskResultScreenState extends State<RiskResultScreen> {
             // be the same as not showing it.
             initiallyExpanded: trust.isAdverse,
           ),
+          // Offered only where there is a reason to look. Inviting a check of
+          // the national fraud register on every ordinary payment would train
+          // people to tap past it, which is the opposite of the point.
+          if (_warrantsRegistryCheck) ...<Widget>[
+            const SizedBox(height: 14),
+            SuspectRegistryCard(
+              vpa: trust.vpa,
+              onCopy: widget.services.externalActions.copyText,
+              onOpenRegistry:
+                  widget.services.externalActions.openSuspectRegistry,
+            ),
+          ],
         ],
         const SizedBox(height: 24),
         CollapsibleSection(
@@ -1291,6 +1314,20 @@ class _PayeeNameClaimCard extends StatelessWidget {
                 style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                   height: 1.5,
                   fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(height: 8),
+              // The instruction above is not advice FinGuard invented: every
+              // UPI app has been required to show the bank-verified name
+              // since 1 June 2026. Citing the rule tells the user the check
+              // is guaranteed to be available, not merely likely.
+              Text(
+                'Every UPI app in India has been required to show the '
+                'bank-verified name since 1 June 2026.',
+                key: const Key('payee_name_mandate_citation'),
+                style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                  color: AppColors.inkMuted,
+                  height: 1.4,
                 ),
               ),
             ],

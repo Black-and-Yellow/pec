@@ -51,4 +51,13 @@ abstract final class AppConfig {
     'GOOGLE_ANDROID_SERVER_CLIENT_ID',
   );
   static final Uri cybercrimePortal = Uri.parse('https://cybercrime.gov.in/');
+
+  /// The government's own "Report & Check Suspect" search, which accepts a UPI
+  /// ID and answers from I4C's repository of identifiers reported by banks and
+  /// victims. FinGuard cannot read that repository - it sits behind a CAPTCHA,
+  /// and scraping a government portal would be indefensible - so the app hands
+  /// the address over and lets the user run the authoritative check themselves.
+  static final Uri suspectRegistry = Uri.parse(
+    'https://cybercrime.gov.in/Webform/suspect_search_repository.aspx',
+  );
 }

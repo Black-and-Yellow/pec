@@ -12,6 +12,7 @@ class RiskWeights:
     call_with_remote_access: int = 12
     payee_identity_impersonation: int = 20
     payee_trust_low: int = 10
+    mule_account_signature: int = 22
     payee_name_unverified_informational: int = 0
     payee_name_unverified_borrowed_brand: int = 14
     first_time_payee: int = 18

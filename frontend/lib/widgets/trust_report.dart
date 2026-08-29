@@ -320,3 +320,111 @@ Color _gradeSurface(TrustGrade grade) => switch (grade) {
   TrustGrade.d => AppColors.dangerSurface,
   TrustGrade.isNew => AppColors.surfaceMuted,
 };
+
+/// Hands a UPI ID to the government's own suspect registry.
+///
+/// FinGuard's bureau is built from what its own network has seen. The
+/// authoritative list of identifiers reported by banks and victims belongs to
+/// I4C, sits behind a CAPTCHA, and is not something this app can or should
+/// read programmatically. So the app does the one useful thing it honestly
+/// can: it puts the address on the clipboard and opens the official search, at
+/// the moment the user has a reason to run it. FinGuard is not claiming the
+/// government's answer here - it is handing over the question.
+class SuspectRegistryCard extends StatefulWidget {
+  const SuspectRegistryCard({
+    required this.vpa,
+    required this.onCopy,
+    required this.onOpenRegistry,
+    super.key,
+  });
+
+  final String vpa;
+  final Future<void> Function(String vpa) onCopy;
+  final Future<void> Function() onOpenRegistry;
+
+  @override
+  State<SuspectRegistryCard> createState() => _SuspectRegistryCardState();
+}
+
+class _SuspectRegistryCardState extends State<SuspectRegistryCard> {
+  bool _busy = false;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    key: const Key('suspect_registry_card'),
+    width: double.infinity,
+    padding: const EdgeInsets.all(16),
+    decoration: BoxDecoration(
+      color: AppColors.surface,
+      border: Border.all(color: AppColors.border),
+      borderRadius: BorderRadius.circular(12),
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        Row(
+          children: <Widget>[
+            const Icon(
+              Icons.account_balance_outlined,
+              size: 20,
+              color: AppColors.tealDark,
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                'Check the government list',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        Text(
+          'India\u2019s cybercrime portal keeps the official record of UPI IDs '
+          'reported by banks and victims. FinGuard cannot read that list, so '
+          'this copies the ID and opens the official search for you.',
+          style: Theme.of(
+            context,
+          ).textTheme.bodyMedium?.copyWith(color: AppColors.inkMuted, height: 1.5),
+        ),
+        const SizedBox(height: 14),
+        SizedBox(
+          width: double.infinity,
+          child: OutlinedButton.icon(
+            key: const Key('open_suspect_registry_button'),
+            onPressed: _busy ? null : _handoff,
+            icon: const Icon(Icons.open_in_new, size: 18),
+            label: Text(_busy ? 'Opening\u2026' : 'Copy ID and open the check'),
+          ),
+        ),
+      ],
+    ),
+  );
+
+  Future<void> _handoff() async {
+    setState(() => _busy = true);
+    try {
+      // Copy first: if opening the browser fails, the user still has the
+      // address in hand and can run the search themselves.
+      await widget.onCopy(widget.vpa);
+      await widget.onOpenRegistry();
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('${widget.vpa} copied. Paste it into the search.')),
+      );
+    } on Object catch (error) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(error.toString())));
+    } finally {
+      if (mounted) {
+        setState(() => _busy = false);
+      }
+    }
+  }
+}

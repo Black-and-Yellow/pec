@@ -183,6 +183,7 @@ final class FakeShareIntake implements ShareIntake {
 final class FakeExternalActions implements ExternalActions {
   int upiOpenCount = 0;
   int portalOpenCount = 0;
+  int suspectRegistryOpenCount = 0;
   int shareCount = 0;
   int messageTrustedContactCount = 0;
   int dialerOpenCount = 0;
@@ -199,6 +200,11 @@ final class FakeExternalActions implements ExternalActions {
   @override
   Future<void> openCybercrimePortal() async {
     portalOpenCount += 1;
+  }
+
+  @override
+  Future<void> openSuspectRegistry() async {
+    suspectRegistryOpenCount += 1;
   }
 
   @override

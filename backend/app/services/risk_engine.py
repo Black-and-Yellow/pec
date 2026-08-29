@@ -6,6 +6,7 @@ from decimal import ROUND_CEILING, Decimal
 from typing import Any
 
 from app.db.models import FraudIndicator
+from app.repositories.reputation_repository import ReputationSnapshot
 from app.risk_policy import THRESHOLDS, WEIGHTS, RiskThresholds, RiskWeights
 from app.schemas import (
     ACTIVE_CALL_STATES,
@@ -21,6 +22,7 @@ from app.schemas import (
     RiskSignal,
     TrustGrade,
 )
+from app.services import mule_signature
 from app.services.vpa_identity import borrowed_brand_in_claimed_name
 
 REMOTE_ACCESS_TOOL_LABELS: dict[RemoteAccessTool, str] = {
@@ -86,6 +88,7 @@ class RiskInputs:
     qr_provenance: QrProvenance | None = None
     environment: EnvironmentSignals | None = None
     payee_trust: PayeeTrust | None = None
+    reputation: ReputationSnapshot | None = None
 
 
 class RiskEngine:
@@ -191,6 +194,20 @@ class RiskEngine:
                 )
             )
 
+        # Read the ledger for the collection-account shape. This is the one
+        # signal that can see a mule: the address itself is structurally
+        # innocent, so only the traffic through it gives the pattern away.
+        mule = mule_signature.assess(inputs.reputation)
+        if mule.matched:
+            signals.append(
+                RiskSignal(
+                    code="MULE_ACCOUNT_SIGNATURE",
+                    label="This address is collecting like a money-mule account",
+                    weight=self._weights.mule_account_signature,
+                    evidence=mule.evidence,
+                )
+            )
+
         if payment.payee_name is not None:
             borrowed_brand = borrowed_brand_in_claimed_name(
                 payment.payee_name,
@@ -201,12 +218,19 @@ class RiskEngine:
                 if borrowed_brand is not None
                 else self._weights.payee_name_unverified_informational
             )
+            # Since 1 June 2026 every UPI app must display the bank-verified
+            # payee name before confirmation, so the comparison this evidence
+            # asks for is one the payer is guaranteed to be able to make on the
+            # very next screen. That turns a limitation FinGuard cannot fix
+            # into a specific, checkable instruction.
             evidence = (
                 f"The claimed payee name uses '{borrowed_brand}', but the VPA handle does not "
-                "back that organisation. Verify the VPA independently."
+                "back that organisation. Your UPI app must show the bank-verified name before "
+                "you authorise: if it is not this organisation, stop."
                 if borrowed_brand is not None
                 else "The payee name comes from the payment request and cannot be verified "
-                "from the VPA alone."
+                "from the VPA alone. Compare it against the bank-verified name your UPI app "
+                "is required to show on the confirmation screen."
             )
             signals.append(
                 RiskSignal(

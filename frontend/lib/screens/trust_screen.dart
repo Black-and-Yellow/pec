@@ -135,6 +135,13 @@ class _TrustScreenState extends State<TrustScreen> {
               TrustReportCard(trust: trust, initiallyExpanded: true),
               const SizedBox(height: 10),
               _RefreshedAtLabel(refreshedAt: _refreshedAt),
+              const SizedBox(height: 18),
+              SuspectRegistryCard(
+                vpa: trust.vpa,
+                onCopy: widget.services.externalActions.copyText,
+                onOpenRegistry:
+                    widget.services.externalActions.openSuspectRegistry,
+              ),
             ],
             const SizedBox(height: 18),
             const PrivacyNote(
