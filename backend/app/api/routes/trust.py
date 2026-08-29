@@ -16,6 +16,7 @@ from app.schemas import (
     TrustLookupRequest,
     TrustLookupResponse,
 )
+from app.services import mule_signature
 from app.services.identifier_parser import IdentifierKind, classify
 from app.services.trust_score import TrustInputs, TrustScorer
 from app.services.upi_parser import PaymentParseError, parse_upi_uri
@@ -75,6 +76,24 @@ def check_identifier(
             )
         )
 
+    def with_collection_warning(vpa: str, headline: str) -> str:
+        """Lead with the mule shape when the ledger has it.
+
+        The grade cannot carry this on its own. A rented collection account is
+        structurally innocent and often has no reports yet, so it grades on
+        tenure and reach like any other address and the headline reads
+        "nothing adverse on file" - which is exactly the wrong thing to tell
+        someone about to pay one. The pattern lives in the traffic, so it has
+        to be said out loud here, not only when a payment is being scored.
+        """
+        shape = mule_signature.assess(reputation.snapshot(vpa))
+        if not shape.matched:
+            return headline + "."
+        return (
+            f"{shape.evidence} The grade itself reads on tenure and reach: "
+            f"{headline.lower()}."
+        )
+
     if identifier.kind is IdentifierKind.UNSUPPORTED:
         return IdentifierCheckResponse(
             kind="UNSUPPORTED",
@@ -106,7 +125,7 @@ def check_identifier(
                 )
             ],
             addresses_examined=1,
-            summary=f"This link pays {vpa}. {trust.headline}.",
+            summary=f"This link pays {vpa}. {with_collection_warning(vpa, trust.headline)}",
         )
 
     if identifier.kind is IdentifierKind.UPI_ID:
@@ -122,7 +141,7 @@ def check_identifier(
                 )
             ],
             addresses_examined=1,
-            summary=trust.headline + ".",
+            summary=with_collection_warning(identifier.value, trust.headline),
         )
 
     # A mobile number: report only the addresses the network has actually seen.
@@ -143,7 +162,8 @@ def check_identifier(
         worst = min(known, key=standing)
         summary = (
             f"{len(known)} of {examined} UPI addresses formed from this number are known to "
-            f"the network. The weakest is {worst.vpa}: {worst.trust.headline.lower()}."
+            f"the network. The weakest is {worst.vpa}: "
+            f"{with_collection_warning(worst.vpa, worst.trust.headline)}"
         )
     else:
         summary = (

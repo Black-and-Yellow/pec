@@ -74,3 +74,23 @@ def test_a_malformed_payment_link_reports_why(client: TestClient) -> None:
     body = check(client, "upi://pay?pa=&am=100")
     assert body["kind"] == "UNSUPPORTED"
     assert body["reason"]
+
+
+def test_a_mule_shaped_ledger_is_named_on_the_lookup_surface(client: TestClient) -> None:
+    """The grade alone cannot warn about a collection account.
+
+    A rented account is structurally innocent and often carries no reports, so
+    it grades on tenure and reach and its headline reads "nothing adverse on
+    file" - the wrong thing to tell someone about to pay one. The traffic is
+    where the pattern lives, so the lookup has to say it out loud.
+    """
+    body = check(client, "rahul.sharma91@ybl")
+    assert body["addresses"][0]["trust"]["grade"] == "B"
+    assert "Mule accounts collect from many unrelated payers" in body["summary"]
+    # And it must still refuse to call it fraud.
+    assert "not as proof of fraud" in body["summary"]
+
+
+def test_an_ordinary_payee_gets_no_collection_warning(client: TestClient) -> None:
+    body = check(client, "coffee.corner@okaxis")
+    assert "Mule accounts" not in body["summary"]
