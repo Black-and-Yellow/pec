@@ -1,0 +1,50 @@
+[
+  {
+    "id": "coffee-shop",
+    "title": "Coffee-shop QR",
+    "description": "Known recipient and an ordinary INR 180 amount.",
+    "upi_uri": "upi://pay?pa=coffee.corner%40okaxis&pn=Coffee%20Corner&am=180.00&cu=INR&tn=Coffee",
+    "device_id": "demo-device",
+    "context": null,
+    "expected_level": "SAFE",
+    "expected_score": 0
+  },
+  {
+    "id": "tea-stall",
+    "title": "Tea-stall sticker QR",
+    "description": "Static merchant QR with no amount — the most common legitimate UPI request in India.",
+    "upi_uri": "upi://pay?pa=chai.point%40okicici&pn=Chai%20Point&cu=INR",
+    "device_id": "demo-device",
+    "context": null,
+    "expected_level": "SAFE",
+    "expected_score": 23
+  },
+  {
+    "id": "marketplace-seller",
+    "title": "Marketplace seller",
+    "description": "First-time recipient and a moderately unusual INR 4,500 request.",
+    "upi_uri": "upi://pay?pa=market.seller%40okaxis&pn=Marketplace%20Seller&am=4500.00&cu=INR&tn=Order%20payment",
+    "device_id": "demo-device",
+    "context": null,
+    "expected_level": "CAUTION",
+    "expected_score": 33
+  },
+  {
+    "id": "fake-kyc",
+    "title": "Fake KYC request",
+    "description": "Seeded scam recipient, abnormal amount, and deterministic KYC urgency signals.",
+    "upi_uri": "upi://pay?pa=secure-kyc-update%40okaxis&pn=KYC%20Support&am=25000.00&cu=INR&tn=Urgent%20KYC%20account%20block&tr=DEMO-KYC-001",
+    "device_id": "demo-device",
+    "context": {
+      "impersonation": false,
+      "urgency": true,
+      "kyc_threat": true,
+      "reward_or_refund_claim": false,
+      "payment_requested": true,
+      "suspicious_support_claim": false,
+      "confidence": 0.96
+    },
+    "expected_level": "HIGH",
+    "expected_score": 99
+  }
+]
