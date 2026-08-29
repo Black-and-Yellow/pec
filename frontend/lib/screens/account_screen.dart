@@ -301,6 +301,7 @@ class _AccountScreenState extends State<AccountScreen> {
                 key: const Key('confirm_delete_account_button'),
                 style: FilledButton.styleFrom(
                   backgroundColor: AppColors.danger,
+                  foregroundColor: Colors.white,
                 ),
                 onPressed: () {
                   if (confirmationInput.trim() == 'DELETE' &&

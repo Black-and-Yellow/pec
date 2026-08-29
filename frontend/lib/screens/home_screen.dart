@@ -55,7 +55,7 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(
-      toolbarHeight: 60,
+      toolbarHeight: 68,
       title: const FinGuardBrand(compact: true, inverse: true),
       actions: <Widget>[
         if (widget.services.auth != null)
@@ -92,6 +92,7 @@ class _HomeScreenState extends State<HomeScreen> {
     ),
     body: PageBody(
       maxWidth: 1120,
+      padding: const EdgeInsets.fromLTRB(20, 24, 20, 44),
       child: LayoutBuilder(
         builder: (BuildContext context, BoxConstraints constraints) {
           final bool wide = constraints.maxWidth >= 760;
@@ -291,32 +292,42 @@ class _Introduction extends StatelessWidget {
   const _Introduction();
 
   @override
-  Widget build(BuildContext context) => Column(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: <Widget>[
-      Text(
-        'PRE-PAYMENT SAFETY',
-        style: Theme.of(context).textTheme.labelLarge?.copyWith(
-          color: AppColors.teal,
-          letterSpacing: 1.2,
+  Widget build(BuildContext context) => Container(
+    width: double.infinity,
+    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 26),
+    decoration: BoxDecoration(
+      color: AppColors.chrome,
+      borderRadius: BorderRadius.circular(24),
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        Text(
+          'PRE-PAYMENT CHECK',
+          style: Theme.of(context).textTheme.labelLarge?.copyWith(
+            color: AppColors.teal,
+            letterSpacing: 1.3,
+          ),
         ),
-      ),
-      const SizedBox(height: 10),
-      Text(
-        'Detect risk. Trigger response.',
-        style: Theme.of(context).textTheme.headlineMedium,
-      ),
-      const SizedBox(height: 10),
-      ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 720),
-        child: Text(
-          'Check a QR code or UPI payment link, understand why it may be risky, and choose the safer next step before handoff.',
+        const SizedBox(height: 10),
+        Text(
+          'Know what you are paying.',
           style: Theme.of(
             context,
-          ).textTheme.bodyLarge?.copyWith(color: AppColors.inkMuted),
+          ).textTheme.headlineMedium?.copyWith(color: Colors.white),
         ),
-      ),
-    ],
+        const SizedBox(height: 10),
+        ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 660),
+          child: Text(
+            'Scan or paste a UPI request to see the recipient, risk signals and safer next step before any handoff.',
+            style: Theme.of(
+              context,
+            ).textTheme.bodyLarge?.copyWith(color: AppColors.chromeMuted),
+          ),
+        ),
+      ],
+    ),
   );
 }
 
@@ -342,12 +353,12 @@ class _PrimaryActions extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
               Text(
-                'Check a payment request',
+                'Start a check',
                 style: Theme.of(context).textTheme.titleLarge,
               ),
               const SizedBox(height: 4),
               Text(
-                'FinGuard will show the recipient, score, reasons and recommended action.',
+                'Choose how you received the payment request.',
                 style: Theme.of(
                   context,
                 ).textTheme.bodyMedium?.copyWith(color: AppColors.inkMuted),
@@ -407,12 +418,12 @@ class _DemoSection extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: <Widget>[
                 Text(
-                  'Reliable demo cases',
+                  'Try with demo data',
                   style: Theme.of(context).textTheme.titleLarge,
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  'Seeded fixtures; no AI or network required.',
+                  'Fixed examples. No AI or network required.',
                   style: Theme.of(
                     context,
                   ).textTheme.bodyMedium?.copyWith(color: AppColors.inkMuted),

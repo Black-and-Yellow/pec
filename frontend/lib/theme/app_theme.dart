@@ -1,17 +1,17 @@
 import 'package:flutter/material.dart';
 
 abstract final class AppColors {
-  static const Color canvas = Color(0xFFF6F8FA);
+  static const Color canvas = Color(0xFFF4F6F1);
   static const Color surface = Color(0xFFFFFFFF);
-  static const Color surfaceMuted = Color(0xFFF6F8FA);
-  static const Color ink = Color(0xFF1F2328);
-  static const Color inkMuted = Color(0xFF59636E);
-  static const Color chrome = Color(0xFF24292F);
-  static const Color chromeMuted = Color(0xFFB6BEC8);
-  static const Color teal = Color(0xFF1F883D);
-  static const Color tealDark = Color(0xFF1A7F37);
-  static const Color tealSoft = Color(0xFFDAFBE1);
-  static const Color border = Color(0xFFD0D7DE);
+  static const Color surfaceMuted = Color(0xFFEAEEE7);
+  static const Color ink = Color(0xFF142019);
+  static const Color inkMuted = Color(0xFF5C6861);
+  static const Color chrome = Color(0xFF101A15);
+  static const Color chromeMuted = Color(0xFFBBC6BF);
+  static const Color teal = Color(0xFF9BD617);
+  static const Color tealDark = Color(0xFF315800);
+  static const Color tealSoft = Color(0xFFE8F8BE);
+  static const Color border = Color(0xFFD6DDD3);
   static const Color safe = Color(0xFF1A7F37);
   static const Color safeSurface = Color(0xFFDAFBE1);
   static const Color caution = Color(0xFF9A6700);
@@ -24,10 +24,10 @@ abstract final class AppTheme {
   static ThemeData get light {
     const ColorScheme scheme = ColorScheme.light(
       primary: AppColors.teal,
-      onPrimary: Colors.white,
+      onPrimary: AppColors.ink,
       primaryContainer: AppColors.tealSoft,
       onPrimaryContainer: AppColors.tealDark,
-      secondary: AppColors.tealDark,
+      secondary: AppColors.chrome,
       onSecondary: Colors.white,
       error: AppColors.danger,
       onError: Colors.white,
@@ -40,7 +40,7 @@ abstract final class AppTheme {
     final TextTheme textTheme = Typography.material2021().black.apply(
       bodyColor: AppColors.ink,
       displayColor: AppColors.ink,
-      fontFamily: 'Arial',
+      fontFamily: 'sans-serif',
     );
     return ThemeData(
       useMaterial3: true,
@@ -48,23 +48,26 @@ abstract final class AppTheme {
       scaffoldBackgroundColor: AppColors.canvas,
       textTheme: textTheme.copyWith(
         displaySmall: textTheme.displaySmall?.copyWith(
-          fontSize: 40,
-          height: 1.12,
-          fontWeight: FontWeight.w600,
-          letterSpacing: -1,
+          fontSize: 46,
+          height: 1.05,
+          fontWeight: FontWeight.w800,
+          letterSpacing: -1.8,
         ),
         headlineMedium: textTheme.headlineMedium?.copyWith(
-          fontSize: 28,
-          height: 1.15,
-          fontWeight: FontWeight.w700,
-          letterSpacing: -0.5,
+          fontSize: 30,
+          height: 1.08,
+          fontWeight: FontWeight.w800,
+          letterSpacing: -0.9,
         ),
         headlineSmall: textTheme.headlineSmall?.copyWith(
           fontSize: 22,
           height: 1.2,
           fontWeight: FontWeight.w700,
         ),
-        titleLarge: textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
+        titleLarge: textTheme.titleLarge?.copyWith(
+          fontWeight: FontWeight.w800,
+          letterSpacing: -0.35,
+        ),
         titleMedium: textTheme.titleMedium?.copyWith(
           fontWeight: FontWeight.w600,
         ),
@@ -93,7 +96,7 @@ abstract final class AppTheme {
         elevation: 0,
         margin: EdgeInsets.zero,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.all(Radius.circular(8)),
+          borderRadius: BorderRadius.all(Radius.circular(18)),
           side: BorderSide(color: AppColors.border),
         ),
       ),
@@ -101,7 +104,9 @@ abstract final class AppTheme {
         style: FilledButton.styleFrom(
           minimumSize: const Size(48, 52),
           padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 15),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(14),
+          ),
         ),
       ),
       outlinedButtonTheme: OutlinedButtonThemeData(
@@ -109,7 +114,9 @@ abstract final class AppTheme {
           minimumSize: const Size(48, 52),
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
           side: const BorderSide(color: AppColors.border),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(14),
+          ),
         ),
       ),
       textButtonTheme: TextButtonThemeData(
@@ -123,19 +130,19 @@ abstract final class AppTheme {
         fillColor: AppColors.surface,
         contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 15),
         border: OutlineInputBorder(
-          borderRadius: BorderRadius.all(Radius.circular(6)),
+          borderRadius: BorderRadius.all(Radius.circular(14)),
           borderSide: BorderSide(color: AppColors.border),
         ),
         enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.all(Radius.circular(6)),
+          borderRadius: BorderRadius.all(Radius.circular(14)),
           borderSide: BorderSide(color: AppColors.border),
         ),
         focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.all(Radius.circular(6)),
+          borderRadius: BorderRadius.all(Radius.circular(14)),
           borderSide: BorderSide(color: AppColors.teal, width: 2),
         ),
         errorBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.all(Radius.circular(6)),
+          borderRadius: BorderRadius.all(Radius.circular(14)),
           borderSide: BorderSide(color: AppColors.danger),
         ),
       ),
@@ -148,7 +155,7 @@ abstract final class AppTheme {
         backgroundColor: AppColors.surface,
         surfaceTintColor: Colors.transparent,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.all(Radius.circular(8)),
+          borderRadius: BorderRadius.all(Radius.circular(18)),
         ),
       ),
       focusColor: AppColors.tealSoft,

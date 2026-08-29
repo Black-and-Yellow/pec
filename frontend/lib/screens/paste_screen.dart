@@ -54,10 +54,19 @@ class _PasteScreenState extends State<PasteScreen> {
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(title: const Text('Check UPI link')),
     body: PageBody(
-      maxWidth: 720,
+      maxWidth: 820,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
+          Text(
+            'PAYMENT CHECK  /  1 OF 2',
+            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+              color: AppColors.tealDark,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 1.1,
+            ),
+          ),
+          const SizedBox(height: 8),
           Text(
             'Review before handoff',
             style: Theme.of(context).textTheme.headlineMedium,
@@ -94,8 +103,10 @@ class _PasteScreenState extends State<PasteScreen> {
               width: double.infinity,
               padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
-                color: AppColors.tealSoft,
-                borderRadius: BorderRadius.circular(10),
+                color: AppColors.surface,
+                border: const Border(
+                  left: BorderSide(color: AppColors.teal, width: 3),
+                ),
               ),
               child: Row(
                 children: <Widget>[

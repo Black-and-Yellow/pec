@@ -448,59 +448,70 @@ class _ResultHeader extends StatelessWidget {
     };
     return Semantics(
       header: true,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          Wrap(
-            spacing: 10,
-            runSpacing: 10,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            children: <Widget>[
-              RiskBadge(level: assessment.level),
-              if (isDemo)
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 7,
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: _statusSurface(assessment.level),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Wrap(
+              spacing: 10,
+              runSpacing: 10,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: <Widget>[
+                RiskBadge(level: assessment.level),
+                if (isDemo)
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 7,
+                    ),
+                    decoration: BoxDecoration(
+                      color: AppColors.surface.withValues(alpha: 0.7),
+                      border: Border.all(color: AppColors.border),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Text('SEEDED DEMO DATA'),
                   ),
-                  decoration: BoxDecoration(
-                    border: Border.all(color: AppColors.border),
-                    borderRadius: BorderRadius.circular(8),
+              ],
+            ),
+            const SizedBox(height: 18),
+            Text(headline, style: Theme.of(context).textTheme.headlineMedium),
+            const SizedBox(height: 10),
+            Wrap(
+              spacing: 4,
+              runSpacing: 2,
+              crossAxisAlignment: WrapCrossAlignment.end,
+              children: <Widget>[
+                Text(
+                  '${assessment.score}',
+                  key: const Key('risk_score'),
+                  style: Theme.of(context).textTheme.displaySmall?.copyWith(
+                    color: _statusColor(assessment.level),
                   ),
-                  child: const Text('SEEDED DEMO DATA'),
                 ),
-            ],
-          ),
-          const SizedBox(height: 18),
-          Text(headline, style: Theme.of(context).textTheme.headlineMedium),
-          const SizedBox(height: 10),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: <Widget>[
-              Text(
-                '${assessment.score}',
-                key: const Key('risk_score'),
-                style: Theme.of(context).textTheme.displaySmall?.copyWith(
-                  color: _statusColor(assessment.level),
+                Padding(
+                  padding: const EdgeInsets.only(left: 4, bottom: 5),
+                  child: Text(
+                    '/100 risk score',
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      color: AppColors.inkMuted,
+                    ),
+                  ),
                 ),
-              ),
-              Padding(
-                padding: const EdgeInsets.only(left: 4, bottom: 5),
-                child: Text(
-                  '/100 risk score',
-                  style: Theme.of(
-                    context,
-                  ).textTheme.titleMedium?.copyWith(color: AppColors.inkMuted),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          Text(
-            assessment.recommendedAction,
-            style: Theme.of(context).textTheme.bodyLarge,
-          ),
-        ],
+              ],
+            ),
+            const SizedBox(height: 10),
+            Text(
+              assessment.recommendedAction,
+              style: Theme.of(context).textTheme.bodyLarge,
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -509,6 +520,12 @@ class _ResultHeader extends StatelessWidget {
     RiskLevel.safe => AppColors.safe,
     RiskLevel.caution => AppColors.caution,
     RiskLevel.highRisk => AppColors.danger,
+  };
+
+  Color _statusSurface(RiskLevel level) => switch (level) {
+    RiskLevel.safe => AppColors.safeSurface,
+    RiskLevel.caution => AppColors.cautionSurface,
+    RiskLevel.highRisk => AppColors.dangerSurface,
   };
 }
 
@@ -524,8 +541,11 @@ class _ExplanationCard extends StatelessWidget {
     container: true,
     liveRegion: true,
     label: 'Plain-language summary. ${explanation.explanation}',
-    child: WorkspacePanel(
-      padding: const EdgeInsets.all(18),
+    child: Container(
+      padding: const EdgeInsets.fromLTRB(16, 4, 0, 4),
+      decoration: const BoxDecoration(
+        border: Border(left: BorderSide(color: AppColors.border, width: 2)),
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
@@ -793,7 +813,7 @@ class _ActionPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final bool safe = assessment.level == RiskLevel.safe;
-    return Card(
+    return WorkspacePanel(
       child: Padding(
         padding: const EdgeInsets.all(20),
         child: Column(
@@ -849,7 +869,10 @@ class _ActionPanel extends StatelessWidget {
               FilledButton.icon(
                 key: const Key('stop_here_button'),
                 style: assessment.level == RiskLevel.highRisk
-                    ? FilledButton.styleFrom(backgroundColor: AppColors.danger)
+                    ? FilledButton.styleFrom(
+                        backgroundColor: AppColors.danger,
+                        foregroundColor: Colors.white,
+                      )
                     : null,
                 onPressed: onStop,
                 icon: const Icon(Icons.stop_circle_outlined),

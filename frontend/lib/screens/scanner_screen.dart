@@ -70,14 +70,19 @@ class _ScannerScreenState extends State<ScannerScreen> {
                 ),
                 IgnorePointer(
                   child: Center(
-                    child: Container(
-                      width: 250,
-                      height: 250,
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: Colors.white, width: 3),
-                      ),
+                    child: const SizedBox.square(
+                      dimension: 260,
+                      child: CustomPaint(painter: _ScannerFrame()),
                     ),
+                  ),
+                ),
+                const Positioned(
+                  left: 20,
+                  right: 20,
+                  top: 18,
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: _ScannerStatus(),
                   ),
                 ),
                 Positioned(
@@ -104,30 +109,75 @@ class _ScannerScreenState extends State<ScannerScreen> {
           Container(
             color: AppColors.canvas,
             padding: const EdgeInsets.fromLTRB(20, 18, 20, 24),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: <Widget>[
-                if (_error != null) ...<Widget>[
-                  Text(
-                    _error!,
-                    style: Theme.of(
-                      context,
-                    ).textTheme.bodyMedium?.copyWith(color: AppColors.danger),
-                  ),
-                  const SizedBox(height: 12),
-                ],
-                OutlinedButton.icon(
-                  key: const Key('upload_qr_button'),
-                  onPressed: _handling ? null : _pickQrImage,
-                  icon: const Icon(Icons.image_outlined),
-                  label: Text(kIsWeb ? 'Upload QR image' : 'Choose QR image'),
+            child: Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 720),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: <Widget>[
+                    Text(
+                      'Can\'t scan it?',
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      'Use a saved QR image or paste the payment link.',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: AppColors.inkMuted,
+                      ),
+                    ),
+                    if (_error != null) ...<Widget>[
+                      const SizedBox(height: 12),
+                      Text(
+                        _error!,
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: AppColors.danger,
+                        ),
+                      ),
+                    ],
+                    const SizedBox(height: 14),
+                    LayoutBuilder(
+                      builder:
+                          (BuildContext context, BoxConstraints constraints) {
+                            final Widget upload = OutlinedButton(
+                              key: const Key('upload_qr_button'),
+                              onPressed: _handling ? null : _pickQrImage,
+                              child: _ScannerButtonLabel(
+                                icon: Icons.image_outlined,
+                                label: kIsWeb
+                                    ? 'Upload QR image'
+                                    : 'Choose QR image',
+                              ),
+                            );
+                            final Widget paste = TextButton(
+                              onPressed: _handling ? null : _openPaste,
+                              child: const _ScannerButtonLabel(
+                                icon: Icons.link_outlined,
+                                label: 'Paste a UPI link instead',
+                              ),
+                            );
+                            if (constraints.maxWidth >= 520) {
+                              return Row(
+                                children: <Widget>[
+                                  Expanded(child: upload),
+                                  const SizedBox(width: 10),
+                                  Expanded(child: paste),
+                                ],
+                              );
+                            }
+                            return Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: <Widget>[
+                                upload,
+                                const SizedBox(height: 6),
+                                paste,
+                              ],
+                            );
+                          },
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 8),
-                TextButton(
-                  onPressed: _handling ? null : _openPaste,
-                  child: const Text('Paste a UPI link instead'),
-                ),
-              ],
+              ),
             ),
           ),
         ],
@@ -255,6 +305,88 @@ class _ScannerScreenState extends State<ScannerScreen> {
       ),
     );
   }
+}
+
+class _ScannerStatus extends StatelessWidget {
+  const _ScannerStatus();
+
+  @override
+  Widget build(BuildContext context) => DecoratedBox(
+    decoration: BoxDecoration(
+      color: AppColors.ink.withValues(alpha: 0.82),
+      borderRadius: BorderRadius.circular(999),
+      border: Border.all(color: Colors.white24),
+    ),
+    child: const Padding(
+      padding: EdgeInsets.symmetric(horizontal: 11, vertical: 7),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Icon(Icons.shield_outlined, color: Colors.white, size: 16),
+          SizedBox(width: 7),
+          Flexible(
+            child: Text(
+              'Nothing opens automatically',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
+}
+
+class _ScannerButtonLabel extends StatelessWidget {
+  const _ScannerButtonLabel({required this.icon, required this.label});
+
+  final IconData icon;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) => Row(
+    mainAxisAlignment: MainAxisAlignment.center,
+    children: <Widget>[
+      Icon(icon),
+      const SizedBox(width: 8),
+      Flexible(child: Text(label, textAlign: TextAlign.center)),
+    ],
+  );
+}
+
+class _ScannerFrame extends CustomPainter {
+  const _ScannerFrame();
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final Paint paint = Paint()
+      ..color = Colors.white
+      ..strokeWidth = 4
+      ..style = PaintingStyle.stroke
+      ..strokeCap = StrokeCap.square;
+    const double corner = 34;
+    final Path path = Path()
+      ..moveTo(0, corner)
+      ..lineTo(0, 0)
+      ..lineTo(corner, 0)
+      ..moveTo(size.width - corner, 0)
+      ..lineTo(size.width, 0)
+      ..lineTo(size.width, corner)
+      ..moveTo(size.width, size.height - corner)
+      ..lineTo(size.width, size.height)
+      ..lineTo(size.width - corner, size.height)
+      ..moveTo(corner, size.height)
+      ..lineTo(0, size.height)
+      ..lineTo(0, size.height - corner);
+    canvas.drawPath(path, paint);
+  }
+
+  @override
+  bool shouldRepaint(covariant _ScannerFrame oldDelegate) => false;
 }
 
 class _CameraError extends StatelessWidget {

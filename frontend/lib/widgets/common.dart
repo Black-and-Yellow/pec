@@ -44,16 +44,16 @@ class FinGuardBrand extends StatelessWidget {
     mainAxisSize: MainAxisSize.min,
     children: <Widget>[
       Container(
-        width: compact ? 32 : 38,
-        height: compact ? 32 : 38,
+        width: compact ? 34 : 42,
+        height: compact ? 34 : 42,
         decoration: BoxDecoration(
-          color: inverse ? Colors.white : AppColors.teal,
-          borderRadius: BorderRadius.circular(6),
+          color: AppColors.teal,
+          borderRadius: BorderRadius.circular(compact ? 11 : 14),
         ),
         child: Icon(
-          Icons.shield_outlined,
-          color: inverse ? AppColors.tealDark : Colors.white,
-          size: compact ? 19 : 22,
+          Icons.shield_rounded,
+          color: AppColors.ink,
+          size: compact ? 19 : 23,
           semanticLabel: 'FinGuard shield',
         ),
       ),
@@ -61,8 +61,9 @@ class FinGuardBrand extends StatelessWidget {
       Text(
         'FinGuard',
         style: Theme.of(context).textTheme.titleLarge?.copyWith(
-          color: inverse ? Colors.white : AppColors.tealDark,
-          letterSpacing: -0.4,
+          color: inverse ? Colors.white : AppColors.ink,
+          fontWeight: FontWeight.w800,
+          letterSpacing: -0.7,
         ),
       ),
     ],
@@ -76,12 +77,13 @@ class WorkspacePanel extends StatelessWidget {
   final EdgeInsetsGeometry? padding;
 
   @override
-  Widget build(BuildContext context) => DecoratedBox(
+  Widget build(BuildContext context) => Container(
     decoration: BoxDecoration(
       color: AppColors.surface,
       border: Border.all(color: AppColors.border),
-      borderRadius: BorderRadius.circular(8),
+      borderRadius: BorderRadius.circular(20),
     ),
+    clipBehavior: Clip.antiAlias,
     child: Padding(padding: padding ?? EdgeInsets.zero, child: child),
   );
 }
@@ -106,31 +108,27 @@ class WorkspaceAction extends StatelessWidget {
   Widget build(BuildContext context) => Semantics(
     button: true,
     child: Material(
-      color: Colors.transparent,
+      color: emphasized ? AppColors.tealSoft : Colors.transparent,
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(6),
-        hoverColor: AppColors.surfaceMuted,
+        borderRadius: BorderRadius.circular(16),
+        hoverColor: AppColors.tealSoft.withValues(alpha: 0.55),
         focusColor: AppColors.tealSoft,
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 15),
+          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 17),
           child: Row(
             children: <Widget>[
               Container(
-                width: 38,
-                height: 38,
+                width: 44,
+                height: 44,
                 decoration: BoxDecoration(
                   color: emphasized ? AppColors.teal : AppColors.surfaceMuted,
                   border: emphasized
                       ? null
                       : Border.all(color: AppColors.border),
-                  borderRadius: BorderRadius.circular(6),
+                  borderRadius: BorderRadius.circular(14),
                 ),
-                child: Icon(
-                  icon,
-                  size: 20,
-                  color: emphasized ? Colors.white : AppColors.ink,
-                ),
+                child: Icon(icon, size: 20, color: AppColors.ink),
               ),
               const SizedBox(width: 14),
               Expanded(
@@ -365,7 +363,10 @@ Future<bool> confirmAction(
         ),
         FilledButton(
           style: isDanger
-              ? FilledButton.styleFrom(backgroundColor: AppColors.danger)
+              ? FilledButton.styleFrom(
+                  backgroundColor: AppColors.danger,
+                  foregroundColor: Colors.white,
+                )
               : null,
           onPressed: () => Navigator.pop(context, true),
           child: Text(confirmLabel),
