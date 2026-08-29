@@ -2,14 +2,14 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
-import '../models/payee_trust.dart';
+import '../models/identifier_check.dart';
 import '../services/api_service.dart';
 import '../services/app_services.dart';
 import '../theme/app_theme.dart';
 import '../widgets/common.dart';
 import '../widgets/trust_report.dart';
 
-/// Look up a UPI ID's standing before any payment request exists.
+/// Look up who is behind an identifier before any payment request exists.
 ///
 /// This is the "check them before you deal with them" surface: a seller sends
 /// their UPI ID over chat, and the buyer can read its reputation without a QR,
@@ -33,7 +33,7 @@ class _TrustScreenState extends State<TrustScreen> {
   late final TextEditingController _controller;
   bool _loading = false;
   String? _error;
-  PayeeTrust? _trust;
+  IdentifierCheck? _check;
   Timer? _refreshTimer;
   DateTime? _refreshedAt;
 
@@ -66,12 +66,12 @@ class _TrustScreenState extends State<TrustScreen> {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(title: const Text('Check a UPI ID')),
+    appBar: AppBar(title: const Text('Check before you pay')),
     body: RefreshIndicator(
       // Pulling on an empty screen must not fire a lookup for a blank
       // address, so the gesture is a no-op until a report exists.
       onRefresh: () =>
-          _trust == null ? Future<void>.value() : _lookup(silent: true),
+          _check == null ? Future<void>.value() : _lookup(silent: true),
       child: PageBody(
         maxWidth: 820,
         physics: const AlwaysScrollableScrollPhysics(),
@@ -88,14 +88,15 @@ class _TrustScreenState extends State<TrustScreen> {
             ),
             const SizedBox(height: 8),
             Text(
-              'Who is behind this UPI ID?',
+              'Who is behind this?',
               style: Theme.of(context).textTheme.headlineMedium,
             ),
             const SizedBox(height: 10),
             Text(
-              'Paste a UPI ID to see how long the FinGuard network has known '
-              'it, how many people have paid it, and what the address itself '
-              'gives away. Nothing is paid and no UPI app is opened.',
+              'Paste a UPI ID, a payment link, or a mobile number. FinGuard '
+              'works out which it is, then reports how long the network has '
+              'known the address, how many people have paid it, and what the '
+              'address itself gives away. Nothing is paid, and no UPI app opens.',
               style: Theme.of(
                 context,
               ).textTheme.bodyLarge?.copyWith(color: AppColors.inkMuted),
@@ -106,14 +107,14 @@ class _TrustScreenState extends State<TrustScreen> {
               controller: _controller,
               enabled: !_loading,
               autofocus: widget.initialVpa == null,
-              keyboardType: TextInputType.emailAddress,
+              keyboardType: TextInputType.text,
               textInputAction: TextInputAction.search,
               autocorrect: false,
               enableSuggestions: false,
               onSubmitted: (_) => _lookup(),
               decoration: const InputDecoration(
-                labelText: 'UPI ID',
-                hintText: 'name@handle',
+                labelText: 'UPI ID, link, or mobile number',
+                hintText: 'name@handle, upi://pay?… or 98765 43210',
               ),
             ),
             if (_error != null) ...<Widget>[
@@ -126,22 +127,39 @@ class _TrustScreenState extends State<TrustScreen> {
               loading: _loading,
               onPressed: _lookup,
               icon: Icons.travel_explore_outlined,
-              label: 'Check reputation',
+              label: 'Check this',
               loadingLabel: 'Checking…',
               loadingSemanticsLabel: 'Checking reputation',
             ),
-            if (_trust case final PayeeTrust trust) ...<Widget>[
+            if (_check case final IdentifierCheck check) ...<Widget>[
               const SizedBox(height: 26),
-              TrustReportCard(trust: trust, initiallyExpanded: true),
+              _CheckSummary(check: check),
+              for (final CheckedAddress entry in check.addresses) ...<Widget>[
+                const SizedBox(height: 16),
+                if (check.addresses.length > 1)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: Text(
+                      entry.vpa,
+                      style: Theme.of(context).textTheme.titleSmall,
+                    ),
+                  ),
+                TrustReportCard(
+                  trust: entry.trust,
+                  initiallyExpanded: check.addresses.length == 1,
+                ),
+              ],
               const SizedBox(height: 10),
               _RefreshedAtLabel(refreshedAt: _refreshedAt),
-              const SizedBox(height: 18),
-              SuspectRegistryCard(
-                vpa: trust.vpa,
-                onCopy: widget.services.externalActions.copyText,
-                onOpenRegistry:
-                    widget.services.externalActions.openSuspectRegistry,
-              ),
+              if (check.value.contains('@')) ...<Widget>[
+                const SizedBox(height: 18),
+                SuspectRegistryCard(
+                  vpa: check.value,
+                  onCopy: widget.services.externalActions.copyText,
+                  onOpenRegistry:
+                      widget.services.externalActions.openSuspectRegistry,
+                ),
+              ],
             ],
             const SizedBox(height: 18),
             const PrivacyNote(
@@ -171,7 +189,7 @@ class _TrustScreenState extends State<TrustScreen> {
       });
     }
     try {
-      final PayeeTrust trust = await widget.services.api.lookupPayeeTrust(
+      final IdentifierCheck check = await widget.services.api.checkIdentifier(
         _controller.text,
       );
       if (!mounted) {
@@ -179,10 +197,16 @@ class _TrustScreenState extends State<TrustScreen> {
       }
       setState(() {
         _loading = false;
-        _trust = trust;
+        _check = check;
         _refreshedAt = DateTime.now();
       });
-      _startAutoRefresh();
+      // Nothing to poll for an input that named no address.
+      if (check.addresses.isNotEmpty) {
+        _startAutoRefresh();
+      } else {
+        _refreshTimer?.cancel();
+        _refreshTimer = null;
+      }
     } on ApiException catch (error) {
       if (!mounted || silent) {
         return;
@@ -234,6 +258,69 @@ class _RefreshedAtLabel extends StatelessWidget {
           ).textTheme.labelSmall?.copyWith(color: AppColors.inkMuted),
         ),
       ],
+    );
+  }
+}
+
+/// States what the input turned out to be and what the network knows about it.
+///
+/// This carries the whole answer when a mobile number matched nothing, which
+/// is the common case and the one most likely to be misread as reassurance.
+class _CheckSummary extends StatelessWidget {
+  const _CheckSummary({required this.check});
+
+  final IdentifierCheck check;
+
+  @override
+  Widget build(BuildContext context) {
+    final bool unusable = check.kind == IdentifierKind.unsupported;
+    return Container(
+      key: const Key('identifier_check_summary'),
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: unusable ? AppColors.cautionSurface : AppColors.surfaceMuted,
+        border: Border.all(
+          color: unusable ? AppColors.caution : AppColors.border,
+        ),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Row(
+            children: <Widget>[
+              Text(
+                check.kind.label.toUpperCase(),
+                style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                  color: AppColors.tealDark,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 1.1,
+                ),
+              ),
+              if (!unusable) ...<Widget>[
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    check.value,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                      color: AppColors.inkMuted,
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            check.reason ?? check.summary,
+            style: Theme.of(
+              context,
+            ).textTheme.bodyMedium?.copyWith(height: 1.5),
+          ),
+        ],
+      ),
     );
   }
 }

@@ -4,6 +4,7 @@ import 'dart:ui';
 
 import 'package:finguard/models/auth_session.dart';
 import 'package:finguard/models/context_analysis.dart';
+import 'package:finguard/models/identifier_check.dart';
 import 'package:finguard/models/payee_trust.dart';
 import 'package:finguard/models/payment.dart';
 import 'package:finguard/models/risk.dart';
@@ -111,6 +112,45 @@ final class FakeApi implements FinGuardApi {
   }) async {
     prepareResponseCount += 1;
     return 'Prepared report for ${payment.payeeVpa}';
+  }
+
+  int identifierCheckCount = 0;
+  String? lastIdentifierChecked;
+  IdentifierCheck? identifierCheckResult;
+
+  @override
+  Future<IdentifierCheck> checkIdentifier(String value) async {
+    identifierCheckCount += 1;
+    lastIdentifierChecked = value;
+    // The screen reaches the trust report through this call now, so the same
+    // knobs the lookup tests already use must drive it: a test that pins a
+    // grade should not have to know which endpoint the screen happens to call.
+    trustLookupCount += 1;
+    lastTrustLookupVpa = value.trim().toLowerCase();
+    final ApiException? error = trustLookupError;
+    if (error != null) {
+      throw error;
+    }
+    final IdentifierCheck? canned = identifierCheckResult;
+    if (canned != null) {
+      return canned;
+    }
+    final String vpa = value.trim().toLowerCase();
+    final PayeeTrust trust =
+        trustLookupResult ?? PayeeTrust.fromApiJson(payeeTrustJson(vpa: vpa));
+    return IdentifierCheck(
+      kind: IdentifierKind.upiId,
+      value: trust.vpa,
+      addresses: <CheckedAddress>[
+        CheckedAddress(
+          vpa: trust.vpa,
+          trust: trust,
+          knownToNetwork: !trust.thinFile,
+        ),
+      ],
+      addressesExamined: 1,
+      summary: '${trust.headline}.',
+    );
   }
 
   @override

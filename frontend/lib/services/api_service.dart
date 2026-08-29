@@ -6,6 +6,7 @@ import 'package:http/http.dart' as http;
 
 import '../config/app_config.dart';
 import '../models/context_analysis.dart';
+import '../models/identifier_check.dart';
 import '../models/payee_trust.dart';
 import '../models/payment.dart';
 import '../models/risk.dart';
@@ -25,6 +26,9 @@ abstract interface class FinGuardApi {
 
   /// Reads a payee's standing without scoring or recording a payment.
   Future<PayeeTrust> lookupPayeeTrust(String vpa);
+
+  /// Check whatever the user pasted: a link, a UPI ID, or a phone number.
+  Future<IdentifierCheck> checkIdentifier(String value);
 
   Future<RiskExplanation> explainAssessment({
     required String assessmentId,
@@ -157,6 +161,31 @@ final class ApiService implements FinGuardApi {
     }
     try {
       return PayeeTrust.fromApiJson(trust);
+    } on FormatException catch (error) {
+      throw ApiException(error.message.toString());
+    }
+  }
+
+  @override
+  Future<IdentifierCheck> checkIdentifier(String value) async {
+    final String trimmed = value.trim();
+    if (trimmed.isEmpty) {
+      throw const ApiException(
+        'Enter a UPI ID, a payment link, or a mobile number.',
+      );
+    }
+    if (trimmed.length > 2048) {
+      throw const ApiException('That is too long to check.');
+    }
+    // Classification is the server's job on purpose: the rules for what counts
+    // as a mobile number or a valid handle live in one place, so the app and
+    // the scorer can never disagree about what was checked.
+    final Map<String, Object?> json = await _post(
+      'api/v1/trust/check',
+      <String, Object?>{'value': trimmed},
+    );
+    try {
+      return IdentifierCheck.fromApiJson(json);
     } on FormatException catch (error) {
       throw ApiException(error.message.toString());
     }

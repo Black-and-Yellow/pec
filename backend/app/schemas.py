@@ -21,6 +21,14 @@ VPA_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}@[A-Za-z0-9][A-Za-z0
 DEVICE_ID_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{2,127}$")
 MAX_PAYMENT_AMOUNT = Decimal("10000000")
 
+# Bidirectional overrides, embeddings and isolates. They change the order text
+# is drawn in, which is a way to make a displayed payee name disagree with the
+# one that was checked. U+200C and U+200D are excluded on purpose: Indic
+# scripts need them, and they are handled by folding at comparison time.
+BIDI_CONTROL_CHARACTERS = frozenset(
+    "‪‫‬‭‮⁦⁧⁨⁩‎‏"
+)
+
 DeviceId = Annotated[str, StringConstraints(strip_whitespace=True, min_length=3, max_length=128)]
 AssessmentId = Annotated[
     str,
@@ -87,6 +95,13 @@ class PaymentDetails(StrictModel):
             return None
         if any(ord(character) < 32 or ord(character) == 127 for character in value):
             raise ValueError("control characters are not allowed")
+        if BIDI_CONTROL_CHARACTERS & set(value):
+            # These reorder text at render time, so the name a victim reads can
+            # differ from the name that was scored. Nothing legitimate needs
+            # them in a payee name. Zero-width joiners are deliberately still
+            # allowed: Indic scripts require them to render correctly, and the
+            # matcher folds them away rather than the payer losing their name.
+            raise ValueError("bidirectional formatting characters are not allowed")
         cleaned = " ".join(value.split())
         return cleaned or None
 
@@ -314,6 +329,34 @@ class TrustLookupRequest(StrictModel):
 
 class TrustLookupResponse(StrictModel):
     trust: PayeeTrust
+
+
+class IdentifierCheckRequest(StrictModel):
+    """Anything a person might paste: a link, a UPI ID, or a phone number."""
+
+    value: str = Field(min_length=1, max_length=2048)
+
+
+class CheckedAddress(StrictModel):
+    """One address that was actually looked up, and what came back."""
+
+    vpa: str
+    trust: PayeeTrust
+    known_to_network: bool
+
+
+class IdentifierCheckResponse(StrictModel):
+    kind: Literal["UPI_LINK", "UPI_ID", "MOBILE", "UNSUPPORTED"]
+    #: The cleaned input: a normalised VPA, ten digits, or the original link.
+    value: str
+    #: Empty for UNSUPPORTED, and for a mobile number no address of which is
+    #: known to the network.
+    addresses: list[CheckedAddress] = Field(default_factory=list)
+    #: How many addresses were consulted. For a mobile number this exceeds the
+    #: number reported, because most candidates have no record at all.
+    addresses_examined: int = 0
+    summary: str
+    reason: str | None = None
 
 
 class RiskScoreRequest(StrictModel):

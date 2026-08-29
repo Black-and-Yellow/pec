@@ -15,6 +15,7 @@ intentionally the only pillar that works for a VPA nobody has ever checked.
 from __future__ import annotations
 
 import re
+import unicodedata
 from dataclasses import dataclass
 from enum import StrEnum
 
@@ -261,12 +262,35 @@ class VpaIdentity:
         return self.impersonated_brand is not None or self.lookalike_of is not None
 
 
+def fold_for_matching(text: str) -> str:
+    """Reduce text to the form a reader actually sees, for comparison only.
+
+    A single invisible character defeats a naive token match: "S​BI Refund"
+    renders as "SBI Refund" on every screen a victim will look at, but the
+    substring "sbi" is not present in the raw string, so a borrowed bank name
+    passes unnoticed. Unicode format characters (category Cf) are therefore
+    dropped and the result is compatibility-normalised before any comparison,
+    so fullwidth and styled variants collapse onto their plain equivalents too.
+
+    This is deliberately not applied to stored or displayed values. Zero-width
+    joiners carry real meaning in Indic scripts, and a payee whose name needs
+    one must keep it; the folding exists so detection sees through obfuscation
+    without the app rewriting somebody's name.
+    """
+    normalized = unicodedata.normalize("NFKC", text)
+    return "".join(
+        character
+        for character in normalized
+        if unicodedata.category(character) != "Cf"
+    ).lower()
+
+
 def _tokens(local_part: str) -> list[str]:
-    return [token for token in SEPARATOR_PATTERN.split(local_part.lower()) if token]
+    return [token for token in SEPARATOR_PATTERN.split(fold_for_matching(local_part)) if token]
 
 
 def _collapsed(local_part: str) -> str:
-    return SEPARATOR_PATTERN.sub("", local_part.lower())
+    return SEPARATOR_PATTERN.sub("", fold_for_matching(local_part))
 
 
 def _edit_distance_within(candidate: str, target: str, limit: int) -> bool:

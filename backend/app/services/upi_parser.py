@@ -9,7 +9,11 @@ from pydantic import ValidationError
 
 from app.schemas import MAX_PAYMENT_AMOUNT, PaymentDetails, QrProvenance
 
-AMOUNT_PATTERN = re.compile(r"^\d{1,8}(?:\.\d{1,2})?$")
+# ASCII digits only. Python's \d also matches Arabic-Indic, Devanagari and
+# fullwidth digits, and Decimal parses them, so "١٠٠" would become 100 while the
+# QR displays a number the payer cannot read. An amount must look like what
+# it is worth.
+AMOUNT_PATTERN = re.compile(r"^[0-9]{1,8}(?:\.[0-9]{1,2})?$")
 OPAQUE_TOKEN_PATTERN = re.compile(r"^[\x21-\x7e]+$")
 MODE_PATTERN = re.compile(r"^\d{1,2}$")
 MERCHANT_CATEGORY_PATTERN = re.compile(r"^\d{4}$")
