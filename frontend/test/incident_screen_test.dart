@@ -88,28 +88,21 @@ void main() {
     expect(actions.dialerOpenCount, 0);
   });
 
-  testWidgets('cancelling clipboard confirmation does not copy the report', (
+  testWidgets('tapping copy immediately copies the report without a dialog', (
     WidgetTester tester,
   ) async {
+    // Clipboard copy is local and reversible, so it no longer sits behind a
+    // confirmation modal (see the tiering note on `confirmAction`) — the
+    // "Copied" snackbar and button-label swap are the feedback instead.
     final FakeExternalActions actions = FakeExternalActions();
     await pumpIncidentScreen(tester, actions);
 
     await tester.tap(find.byKey(const Key('copy_report_button')));
     await tester.pumpAndSettle();
 
-    expect(find.text('Copy incident draft?'), findsOneWidget);
-    expect(
-      find.text(
-        'This will copy the incident draft to your device clipboard. Review it before sharing it with anyone.',
-      ),
-      findsOneWidget,
-    );
-
-    await tester.tap(find.text('Cancel'));
-    await tester.pumpAndSettle();
-
-    expect(actions.copiedText, isNull);
-    expect(find.text('Copied'), findsNothing);
+    expect(find.text('Copy incident draft?'), findsNothing);
+    expect(actions.copiedText, isNotNull);
+    expect(find.text('Copied'), findsOneWidget);
   });
 
   testWidgets('confirming clipboard access copies the incident report', (

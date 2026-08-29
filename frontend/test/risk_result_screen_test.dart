@@ -142,6 +142,16 @@ void main() {
       find.textContaining('A quiet result is not a guarantee'),
       findsOneWidget,
     );
+
+    // The signal breakdown is a closed-by-default disclosure now, so the
+    // detail text underneath it needs an explicit expand first.
+    await tester.scrollUntilVisible(
+      find.byKey(const Key('why_this_score_toggle')),
+      250,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.tap(find.byKey(const Key('why_this_score_toggle')));
+    await tester.pump();
     expect(
       find.text(
         'The deterministic policy found no risk-raising signals in this request.',
@@ -216,6 +226,15 @@ void main() {
 
     expect(find.text('CAUTION'), findsOneWidget);
     expect(find.text('33'), findsOneWidget);
+
+    // The signal breakdown is a closed-by-default disclosure now.
+    await tester.scrollUntilVisible(
+      find.byKey(const Key('why_this_score_toggle')),
+      250,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.tap(find.byKey(const Key('why_this_score_toggle')));
+    await tester.pump();
     expect(find.text('First-time recipient'), findsOneWidget);
     expect(
       find.text('No completed payment exists in local history'),
@@ -262,9 +281,12 @@ void main() {
     expect(actions.upiOpenCount, 0);
   });
 
-  testWidgets('saved trusted contact requires confirmation before messaging', (
+  testWidgets('saved trusted contact messages directly without a dialog', (
     WidgetTester tester,
   ) async {
+    // Demoted out of the modal tier: the button label itself ("Alert Amma
+    // on WhatsApp") already states what happens, and WhatsApp/SMS still
+    // requires the user to press Send there before anything is sent.
     final MemoryLocalStore store = MemoryLocalStore();
     await store.setTrustedContact(
       const TrustedContact(name: 'Amma', phone: '919876543210'),
@@ -321,15 +343,8 @@ void main() {
 
     await tester.tap(messageButton);
     await tester.pumpAndSettle();
-    expect(find.text('Message Amma on WhatsApp or SMS?'), findsOneWidget);
-    await tester.tap(find.text('Cancel'));
-    await tester.pumpAndSettle();
-    expect(actions.messageTrustedContactCount, 0);
 
-    await tester.tap(messageButton);
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Open messaging app'));
-    await tester.pumpAndSettle();
+    expect(find.text('Message Amma on WhatsApp or SMS?'), findsNothing);
     expect(actions.messageTrustedContactCount, 1);
     expect(actions.messagedPhone, '919876543210');
     expect(actions.messagedText, contains('scam@upi'));
@@ -381,7 +396,25 @@ void main() {
 
     expect(find.text('HIGH RISK'), findsOneWidget);
     expect(find.text('83'), findsOneWidget);
+
+    // Payment details and the signal breakdown are closed-by-default
+    // disclosures now, so expand both before reading their contents.
+    await tester.scrollUntilVisible(
+      find.byKey(const Key('payment_details_toggle')),
+      250,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.tap(find.byKey(const Key('payment_details_toggle')));
+    await tester.pump();
     expect(find.text('Fake Support'), findsOneWidget);
+
+    await tester.scrollUntilVisible(
+      find.byKey(const Key('why_this_score_toggle')),
+      250,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.tap(find.byKey(const Key('why_this_score_toggle')));
+    await tester.pump();
     expect(
       find.text('Recipient matches seeded scam indicator'),
       findsOneWidget,

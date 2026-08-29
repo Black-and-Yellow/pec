@@ -266,6 +266,101 @@ class RiskBadge extends StatelessWidget {
   }
 }
 
+/// A closed-by-default disclosure for secondary detail (raw payment fields,
+/// the full signal breakdown) so the primary decision on a result screen is
+/// reachable without scrolling past information the user already has.
+class CollapsibleSection extends StatefulWidget {
+  const CollapsibleSection({
+    required this.title,
+    required this.child,
+    super.key,
+    this.subtitle,
+    this.initiallyExpanded = false,
+    this.headerKey,
+  });
+
+  final String title;
+  final String? subtitle;
+  final Widget child;
+  final bool initiallyExpanded;
+  final Key? headerKey;
+
+  @override
+  State<CollapsibleSection> createState() => _CollapsibleSectionState();
+}
+
+class _CollapsibleSectionState extends State<CollapsibleSection> {
+  late bool _expanded = widget.initiallyExpanded;
+
+  @override
+  Widget build(BuildContext context) => WorkspacePanel(
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: <Widget>[
+        Semantics(
+          button: true,
+          label: widget.subtitle == null
+              ? widget.title
+              : '${widget.title}, ${widget.subtitle}',
+          value: _expanded ? 'expanded' : 'collapsed',
+          child: Material(
+            color: Colors.transparent,
+            child: InkWell(
+              key: widget.headerKey,
+              onTap: () => setState(() => _expanded = !_expanded),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 14,
+                ),
+                child: Row(
+                  children: <Widget>[
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: <Widget>[
+                          Text(
+                            widget.title,
+                            style: Theme.of(context).textTheme.titleMedium,
+                          ),
+                          if (widget.subtitle != null) ...<Widget>[
+                            const SizedBox(height: 2),
+                            Text(
+                              widget.subtitle!,
+                              style: Theme.of(
+                                context,
+                              ).textTheme.bodySmall?.copyWith(
+                                color: AppColors.inkMuted,
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    AnimatedRotation(
+                      turns: _expanded ? 0.5 : 0,
+                      duration: const Duration(milliseconds: 180),
+                      child: const Icon(
+                        Icons.expand_more,
+                        color: AppColors.inkMuted,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+        if (_expanded) ...<Widget>[
+          const Divider(height: 1),
+          Padding(padding: const EdgeInsets.all(16), child: widget.child),
+        ],
+      ],
+    ),
+  );
+}
+
 class ErrorNotice extends StatelessWidget {
   const ErrorNotice({
     required this.message,
@@ -346,17 +441,37 @@ class PrivacyNote extends StatelessWidget {
   );
 }
 
+/// Confirmation dialogs are reserved for genuinely irreversible or external
+/// actions (opening a UPI app, calling emergency helplines, leaving the app
+/// to a government site). Internal/reversible actions (copying text,
+/// preparing a local draft, opening a share sheet the OS already gates)
+/// should act directly and use a snackbar for feedback instead — stacking a
+/// modal in front of every action trains users to tap through without
+/// reading, which defeats the point of the ones that matter.
 Future<bool> confirmAction(
   BuildContext context, {
   required String title,
   required String message,
   required String confirmLabel,
   bool isDanger = false,
+  IconData? icon,
 }) async {
   final bool? confirmed = await showDialog<bool>(
     context: context,
     builder: (BuildContext context) => AlertDialog(
-      title: Text(title),
+      title: icon == null
+          ? Text(title)
+          : Row(
+              children: <Widget>[
+                Icon(
+                  icon,
+                  color: isDanger ? AppColors.danger : AppColors.tealDark,
+                  size: 22,
+                ),
+                const SizedBox(width: 10),
+                Expanded(child: Text(title)),
+              ],
+            ),
       content: Text(message),
       actions: <Widget>[
         TextButton(

@@ -9,11 +9,21 @@ from app.db.models import FraudIndicator
 from app.risk_policy import THRESHOLDS, WEIGHTS, RiskThresholds, RiskWeights
 from app.schemas import (
     ContextSignals,
+    EnvironmentSignals,
     PaymentDetails,
+    RemoteAccessTool,
     RiskAssessmentPayload,
     RiskLevel,
     RiskSignal,
 )
+
+REMOTE_ACCESS_TOOL_LABELS: dict[RemoteAccessTool, str] = {
+    RemoteAccessTool.ANYDESK: "AnyDesk",
+    RemoteAccessTool.TEAMVIEWER: "TeamViewer",
+    RemoteAccessTool.RUSTDESK: "RustDesk",
+    RemoteAccessTool.AIRDROID: "AirDroid",
+    RemoteAccessTool.OTHER: "a remote-access tool",
+}
 
 SUSPICIOUS_NOTE_PATTERN = re.compile(
     r"\b(urgent|immediately|kyc|verify now|account (?:block|freeze|suspend)|"
@@ -24,6 +34,7 @@ SUSPICIOUS_NOTE_PATTERN = re.compile(
 CORROBORATING_SIGNAL_CODES = frozenset(
     {
         "SEEDED_FRAUD_MATCH",
+        "REMOTE_ACCESS_TOOL_PRESENT",
         "SUSPICIOUS_PAYMENT_NOTE",
         "SEEDED_IDENTIFIER_RELATIONSHIP",
         "CONTEXT_IMPERSONATION",
@@ -42,6 +53,7 @@ class RiskInputs:
     typical_amount: Decimal | None
     indicator: FraudIndicator | None
     context: ContextSignals | None = None
+    environment: EnvironmentSignals | None = None
 
 
 class RiskEngine:
@@ -57,6 +69,21 @@ class RiskEngine:
     def score(self, inputs: RiskInputs) -> RiskAssessmentPayload:
         signals: list[RiskSignal] = []
         payment = inputs.payment
+
+        remote_tools = list(inputs.environment.remote_access_tools) if inputs.environment else []
+        if remote_tools:
+            signals.append(
+                RiskSignal(
+                    code="REMOTE_ACCESS_TOOL_PRESENT",
+                    label="A remote-access app is installed on this device",
+                    weight=self._weights.remote_access_tool,
+                    evidence=(
+                        f"{self._describe_remote_tools(remote_tools)} can let someone else see "
+                        "and control this screen. Scammers ask victims to install these before "
+                        "a payment."
+                    ),
+                )
+            )
 
         if inputs.indicator is not None:
             signals.append(
@@ -176,6 +203,13 @@ class RiskEngine:
             return Decimal(self._thresholds.no_history_unusual_amount)
         historical_threshold = typical_amount * self._thresholds.amount_multiplier
         return max(Decimal(self._thresholds.minimum_unusual_amount), historical_threshold)
+
+    @staticmethod
+    def _describe_remote_tools(tools: list[RemoteAccessTool]) -> str:
+        names = list(dict.fromkeys(REMOTE_ACCESS_TOOL_LABELS[tool] for tool in tools))
+        if len(names) == 1:
+            return names[0]
+        return f"{', '.join(names[:-1])} and {names[-1]}"
 
     @staticmethod
     def _relationship_count(indicator: FraudIndicator) -> int:

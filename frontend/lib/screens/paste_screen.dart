@@ -164,11 +164,18 @@ class _PasteScreenState extends State<PasteScreen> {
           : null;
       final Payment payment = await widget.services.api.parsePayment(raw);
       final String deviceId = await widget.services.store.deviceId();
+      // Read the device environment at check time so the deterministic policy
+      // can weigh an active remote-access tool alongside the payment signals.
+      final List<String> remoteAccessTools = await widget
+          .services
+          .threatEnvironment
+          .remoteAccessTools();
       final RiskScoreResult scoreResult = await widget.services.api
           .scorePayment(
             payment: payment,
             deviceId: deviceId,
             context: validatedContext,
+            remoteAccessTools: remoteAccessTools,
           );
       final Payment validatedPayment = scoreResult.payment;
       final RiskAssessment assessment = scoreResult.assessment;

@@ -1,5 +1,7 @@
 # FinGuard — hackathon feature implementation handoff
 
+> **Status update (2026-08-29):** W0–W7 below have been implemented and merged (`63f311e`). Reviewed by reading every changed file against this spec — implementation matches or exceeds it in several places (see notes inline where relevant). Not yet independently re-run through `scripts/verify.ps1` on this machine; run it before treating as demo-final. **Part 2 (below the original plan) is new, unimplemented work: account-bound Trusted Payees.**
+
 Audience: the implementing agent picking this up from a cold start.
 Created: 2026-08-29
 
@@ -815,3 +817,285 @@ Do not skip this — the docs are part of what gets judged.
 - When a change alters a score, update the backend fixture, the Flutter bundled fixture, and the README demo table **in the same commit**. Those three drift apart easily and the drift is invisible until the demo.
 - Prior security review specifically flagged demo results leaking real-incident affordances. When touching `risk_result_screen.dart`, re-check every `isDemo` and `paymentHandoffEnabled` guard still holds.
 - If any acceptance criterion cannot be met, stop and report it rather than weakening the criterion. Do not silently narrow scope.
+
+---
+
+# Part 2 — Trusted Payees (account-bound safe list)
+
+Added: 2026-08-29. Status: **not yet implemented.**
+
+## Why this exists
+
+The account system (email/password + guest, already fully built) currently does nothing for the safety flow — `known_payee` is computed purely from anonymous device history (`transactions.has_completed_payment_to`, `backend/app/api/routes/risk.py:80`). Signing in buys you nothing today except session management.
+
+This feature gives the account real utility: **a list of payees you have explicitly told FinGuard you trust, checked before every future score, and available on any device you sign into** — unlike device-local history, which resets on reinstall.
+
+### Naming — do not confuse this with the existing "Trusted Contact"
+
+| | **Trusted Contact** (shipped, Part 1 W2) | **Trusted Payees** (this section) |
+|---|---|---|
+| What it is | The one person alerted when something looks wrong | The list of people/merchants you already trust to pay |
+| Storage | Device-local only (`SharedPreferences`), never sent to the API | Server-side, tied to the account row |
+| Requires sign-in? | No — works in guest mode | Yes — this is the account's reason to exist |
+| Effect on scoring | None | Suppresses `FIRST_TIME_PAYEE` / `UNUSUAL_AMOUNT` for that VPA |
+
+Use "Trusted Payees" (plural, capitalized as a feature name) everywhere in code, routes, and UI copy to keep this distinct from "trusted contact."
+
+## Scope decision — read before building
+
+"Add contacts for approval" is being built as **self-approval**: you add a VPA, you confirm it, it is trusted. A two-party flow (a family member approves your payment in real time) needs push notifications or polling between two accounts, which this codebase deliberately has no infrastructure for (`README.md`: "FCM is intentionally not part of this MVP") and would break the zero-cost/no-new-dependency constraint. If real two-party approval is wanted later, it is a distinct, larger feature — do not fold it into this spec.
+
+"Already-paid merchants and contacts as safe" is built as a **promotion prompt**: when a SAFE result comes from device history the account has not yet marked trusted, offer a one-tap "add to trusted payees" — turning proven history into an explicit, confirmed decision. Never auto-add without that tap; that would violate the app's "always confirm" rule (`AGENTS.md`).
+
+## Guardrails specific to this feature
+
+- **A trusted payee must never suppress `SEEDED_FRAUD_MATCH`.** If a user mistakenly (or under duress) adds a scam VPA as trusted, the seeded-indicator check still runs independently and still fires. Verify this with an explicit test — see acceptance criteria.
+- **Guest mode must keep working exactly as today.** `risk/score` becomes auth-aware, never auth-required. A missing, expired, or invalid token must silently fall back to device-only scoring — never a 401 on the scoring endpoint.
+- **The trusted-payee list is private to the account.** No endpoint may return another user's list; standard `get_current_user` ownership scoping applies to every route.
+- Keep the existing separation intact: this is a new table with a foreign key to `users.id`. It does not touch `Transaction` or `RiskAssessment`, and does not reintroduce a link from account identity to scored payment records — `PROJECT_CONTEXT.md`'s stated boundary ("Account identity intentionally has no foreign key to payment assessments") stays true. Trusted payees are address-book data, not payment history.
+
+## Backend changes
+
+### New model — `backend/app/db/models.py`
+
+```python
+class TrustedPayee(Base):
+    __tablename__ = "trusted_payees"
+    __table_args__ = (UniqueConstraint("user_id", "vpa", name="uq_trusted_payee_user_vpa"),)
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True, default=new_id)
+    user_id: Mapped[str] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), index=True
+    )
+    vpa: Mapped[str] = mapped_column(String(193), index=True)
+    label: Mapped[str] = mapped_column(String(80))
+    kind: Mapped[str] = mapped_column(String(16))  # CONTACT or MERCHANT
+    source: Mapped[str] = mapped_column(String(24))  # MANUAL or PROMOTED_FROM_HISTORY
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+```
+
+Cap at **50 rows per user** (mirrors the existing per-device history bound elsewhere in the codebase) — enforce in the repository, reject the 51st with a clear error rather than silently evicting the oldest (unlike anonymous history, a user's own curated list should never silently lose entries).
+
+### New schemas — `backend/app/schemas.py`
+
+```python
+class TrustedPayeeKind(StrEnum):
+    CONTACT = "CONTACT"
+    MERCHANT = "MERCHANT"
+
+class TrustedPayeeCreateRequest(StrictModel):
+    vpa: str = Field(min_length=3, max_length=193)
+    label: str = Field(min_length=1, max_length=80)
+    kind: TrustedPayeeKind
+
+    @field_validator("vpa")
+    @classmethod
+    def normalize_vpa(cls, value: str) -> str:
+        normalized = value.strip().lower()
+        if not VPA_PATTERN.fullmatch(normalized):
+            raise ValueError("vpa must be a valid UPI virtual payment address")
+        return normalized
+
+class TrustedPayeeResponse(StrictModel):
+    id: str
+    vpa: str
+    label: str
+    kind: TrustedPayeeKind
+    source: Literal["MANUAL", "PROMOTED_FROM_HISTORY"]
+    created_at: datetime
+
+class TrustedPayeeListResponse(StrictModel):
+    payees: list[TrustedPayeeResponse]
+```
+
+Reuse `VPA_PATTERN` already defined at the top of `schemas.py` — do not duplicate it.
+
+### New repository — `backend/app/repositories/trusted_payee_repository.py`
+
+Follow the exact shape of `indicator_repository.py` (the smallest existing repository, a good template). Methods: `list_for_user(user_id)`, `find(user_id, vpa) -> TrustedPayee | None`, `create(...)` (raise a typed error on the 50-row cap or a duplicate VPA — map duplicates to a 409, not a 500), `delete(user_id, payee_id) -> bool`.
+
+### New route — `backend/app/api/routes/trusted_payees.py`
+
+```python
+router = APIRouter(prefix="/trusted-payees", tags=["trusted-payees"])
+
+@router.get("", response_model=TrustedPayeeListResponse)
+def list_trusted_payees(
+    user: Annotated[User, Depends(get_current_user)],
+    session: Annotated[Session, Depends(get_session)],
+) -> TrustedPayeeListResponse: ...
+
+@router.post("", response_model=TrustedPayeeResponse, status_code=201)
+def add_trusted_payee(
+    request: TrustedPayeeCreateRequest,
+    user: Annotated[User, Depends(get_current_user)],
+    session: Annotated[Session, Depends(get_session)],
+) -> TrustedPayeeResponse: ...
+
+@router.delete("/{payee_id}", status_code=204)
+def remove_trusted_payee(
+    payee_id: str,
+    user: Annotated[User, Depends(get_current_user)],
+    session: Annotated[Session, Depends(get_session)],
+) -> None: ...
+```
+
+All three require `get_current_user` — reuse it exactly as-is from `app/api/dependencies.py:48`, do not write a parallel implementation. A guest or unauthenticated caller gets the existing 401 `AUTH_REQUIRED` envelope for free.
+
+Register the router in `backend/app/main.py` alongside the other routers.
+
+### Optional-auth dependency — `backend/app/api/dependencies.py`
+
+Add, right after `get_current_user`:
+
+```python
+def get_current_user_optional(
+    credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(bearer_scheme)],
+    session: Annotated[Session, Depends(get_session)],
+    auth_service: Annotated[AuthService, Depends(get_auth_service)],
+) -> User | None:
+    if credentials is None or credentials.scheme.lower() != "bearer":
+        return None
+    try:
+        return auth_service.authenticate_access_token(
+            UserRepository(session), credentials.credentials
+        )
+    except AuthenticationError:
+        return None
+```
+
+This is deliberately a silent fallback — an expired or malformed token must degrade to "treat as guest," never surface an error on the scoring endpoint. This is the one new dependency this feature needs; everything else reuses existing auth machinery untouched.
+
+### Risk engine integration — `backend/app/api/routes/risk.py`
+
+`score_payment` gains the optional-auth dependency and a trusted-payee lookup:
+
+```python
+@router.post("/score", response_model=RiskScoreResponse)
+def score_payment(
+    request: RiskScoreRequest,
+    session: Annotated[Session, Depends(get_session)],
+    engine: Annotated[RiskEngine, Depends(get_risk_engine)],
+    settings: Annotated[Settings, Depends(get_settings)],
+    integrity: Annotated[ContextIntegrityService, Depends(get_context_integrity)],
+    user: Annotated[User | None, Depends(get_current_user_optional)],
+) -> RiskScoreResponse:
+    ...
+    transactions = TransactionRepository(session)
+    indicators = IndicatorRepository(session)
+    transactions.begin_assessment_write()
+
+    device_known = transactions.has_completed_payment_to(request.device_id, request.payment.vpa)
+    trusted_payee = None
+    if user is not None:
+        trusted_payee = TrustedPayeeRepository(session).find(user.id, request.payment.vpa)
+    known_payee = device_known or trusted_payee is not None
+
+    assessment = engine.score(
+        RiskInputs(
+            payment=request.payment,
+            known_payee=known_payee,
+            typical_amount=transactions.typical_completed_amount(request.device_id),
+            indicator=indicators.find_vpa(request.payment.vpa),
+            context=verified_context,
+            trusted_payee_label=trusted_payee.label if trusted_payee else None,
+        )
+    )
+    ...
+    suggest_trust = (
+        user is not None
+        and trusted_payee is None
+        and device_known
+        and assessment.level is RiskLevel.SAFE
+    )
+    return RiskScoreResponse(
+        ...,
+        suggest_trusted_payee=suggest_trust,
+    )
+```
+
+Do not thread `user` any further than this route. The rest of the pipeline stays anonymous/device-scoped exactly as documented.
+
+### `RiskEngine` — `backend/app/services/risk_engine.py`
+
+Add `trusted_payee_label: str | None = None` to `RiskInputs`. In `score()`, when `inputs.trusted_payee_label is not None`, append a zero-weight informational signal instead of `FIRST_TIME_PAYEE` (already skipped since `known_payee` is `True`):
+
+```python
+if inputs.trusted_payee_label is not None:
+    signals.append(
+        RiskSignal(
+            code="TRUSTED_PAYEE_MATCH",
+            label="Recipient is on your trusted payees list",
+            weight=0,
+            evidence=f"You added this recipient as '{inputs.trusted_payee_label}'.",
+        )
+    )
+```
+
+Weight 0 keeps the client-side weight-sum verification (`frontend/lib/models/risk.dart`) trivially correct — it is pure display, never touches the score. Do not give this a negative weight to actively lower an otherwise-risky score; the whole point is that a real scam indicator match still dominates regardless of this signal. Add the explicit test in the acceptance criteria below to lock this in.
+
+### `RiskScoreResponse` — `backend/app/schemas.py`
+
+Add `suggest_trusted_payee: bool = False` to `RiskScoreResponse` only (not to `RiskAssessmentPayload` — it is a routing hint for this one response, not part of the stored/replayed assessment).
+
+## Frontend changes
+
+### New model — `frontend/lib/models/trusted_payee.dart`
+
+Mirrors the backend schema: `id`, `vpa`, `label`, `kind` (enum `contact`/`merchant`), `source`, `createdAt`. `fromJson`/`toJson` following the pattern in `frontend/lib/models/risk.dart`.
+
+### `ApiService` — `frontend/lib/services/api_service.dart`
+
+Add, following the existing authenticated-call pattern already used elsewhere in this file for endpoints that need a bearer token:
+
+```dart
+Future<List<TrustedPayee>> listTrustedPayees({required String accessToken});
+Future<TrustedPayee> addTrustedPayee({required String accessToken, required String vpa, required String label, required TrustedPayeeKind kind});
+Future<void> removeTrustedPayee({required String accessToken, required String payeeId});
+```
+
+Check how the existing `AuthController`/`ApiService` pairing attaches the in-memory access token today (per `PROJECT_CONTEXT.md`, access tokens live in client memory) and reuse that exact call path — do not introduce a second token-storage mechanism.
+
+### New screen — `frontend/lib/screens/trusted_payees_screen.dart`
+
+List + add (dialog: VPA, label, contact/merchant toggle) + remove (with `confirmAction`, mirroring how `account_screen.dart` handles `_removeTrustedContact`). Reachable only from `AccountScreen`, and only when `_auth.status != AuthStatus.guest` — for guests, show a short nudge instead: "Create an account to save trusted payees across your devices." with the existing `leave_guest_button` action.
+
+### `AccountScreen` — `frontend/lib/screens/account_screen.dart`
+
+Add a card below the existing "Trusted contact" card, titled **"Trusted payees"**, distinct heading so it is never confused with the contact card right above it. Guest: nudge only. Signed-in: a short list preview (name + masked-ish VPA) with a "Manage" button opening `TrustedPayeesScreen`.
+
+### `RiskResultScreen` — `frontend/lib/screens/risk_result_screen.dart`
+
+When the score response carries `suggestTrustedPayee == true` (only possible when signed in, SAFE, and not `isDemo`), show a small inline prompt above `_SignalList`, in the same reassuring tone as `_ExplanationCard`:
+
+"You've paid this recipient before on this device. Add them to your trusted payees?" — [Add] [Not now]
+
+`[Add]` calls `addTrustedPayee(vpa: payment.payeeVpa, label: payment.recipientLabel, kind: .merchant)` — default to `merchant` since it is coming from a payment context; the user can relabel later in `TrustedPayeesScreen` if it was actually a person. Confirm with the existing `confirmAction` helper before the call, consistent with every other write action in this screen.
+
+When a signal with code `TRUSTED_PAYEE_MATCH` is present in `assessment.signals`, render it in `_SignalRow` with `AppColors.safe` — a weight-0 signal already hits the existing `safe` branch of the weight-based color rule, so no code change is needed there, just confirm it visually reads as reassurance, not as a neutral/ignored row.
+
+## Acceptance criteria
+
+- Guest mode: `POST /risk/score` behaves byte-for-byte as it does today. No new field appears in the response body that changes existing client parsing (`suggest_trusted_payee` defaults `false` and the client already ignores unknown-but-declared-false booleans in this envelope).
+- Signed-in user, VPA in their trusted-payees list, zero local device history: `known_payee = true`, no `FIRST_TIME_PAYEE`, no `UNUSUAL_AMOUNT` (even for a large first-ever amount), one `TRUSTED_PAYEE_MATCH` signal at weight 0.
+- **Safety test — must pass:** a trusted payee whose VPA also matches a seeded fraud indicator still produces `SEEDED_FRAUD_MATCH` at full weight and still reaches HIGH RISK if the total crosses 70. Write this as an explicit backend test named for exactly this property, e.g. `test_trusted_payee_never_suppresses_seeded_fraud_match`.
+- SAFE result from device history (2+ completed local payments), signed in, VPA not yet trusted: `suggest_trusted_payee == true`. Same scenario one tap later (now trusted): `suggest_trusted_payee == false` and a `TRUSTED_PAYEE_MATCH` signal appears instead.
+- Demo results (`isDemo == true`) never show the promotion prompt and never call any trusted-payee endpoint — same isolation rule as every other Part 1 feature.
+- Two different accounts each add the same VPA as trusted; each can only ever list/delete their own row. Add a backend test for this directly (not just an assumption from `get_current_user` — assert it).
+- 51st trusted payee for one account is rejected with a clear 4xx, not silently dropped or 500.
+
+## Tests
+
+- `backend/tests/test_trusted_payees_api.py` (new): CRUD happy path, ownership isolation, duplicate-VPA 409, 50-row cap, unauthenticated 401.
+- `backend/tests/test_risk_engine.py`: add the trusted-payee cases above, including the seeded-fraud-match safety test.
+- `backend/tests/test_api.py`: `risk/score` with and without a valid bearer token, confirming guest behavior is unchanged and `suggest_trusted_payee` fires only in the exact documented conditions.
+- `frontend/test/trusted_payee_test.dart` (new): model parsing.
+- `frontend/test/risk_result_screen_test.dart`: promotion prompt appears/hides correctly; tapping Add calls the API with confirm-gate; demo results never show it.
+- `frontend/e2e/finguard.spec.ts`: one flow — sign up, pay a first-time recipient twice via seeded/local history (or stub it), see the promotion prompt, add it, confirm the next check shows `TRUSTED_PAYEE_MATCH`.
+
+## What NOT to build here
+
+- No two-party "someone else approves your payment" flow — flagged above, out of scope.
+- No automatic promotion without a tap.
+- No change to the anonymous device-history path, retention, or the existing `Transaction`/`RiskAssessment` privacy boundary.
+- No new dependency — this is pure FastAPI/SQLAlchemy/Flutter using exactly the primitives already in the codebase.

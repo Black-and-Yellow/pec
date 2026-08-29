@@ -6,6 +6,7 @@ from dataclasses import dataclass
 @dataclass(frozen=True, slots=True)
 class RiskWeights:
     seeded_fraud_match: int = 30
+    remote_access_tool: int = 25
     first_time_payee: int = 18
     amount_not_specified: int = 5
     amount_not_specified_corroborated: int = 20

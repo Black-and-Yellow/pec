@@ -127,7 +127,7 @@ for (const riskCase of riskCases) {
     await expect(
       page.getByRole('heading', { name: new RegExp(`^Risk level ${riskCase.level}\\b`) }),
     ).toBeVisible();
-    await expect(page.getByText('Why this score')).toBeVisible();
+    await expect(page.getByText('Why do we say this?')).toBeVisible();
     await page.screenshot({
       path: path.join(visualQaRoot, `${riskCase.name}-risk-1440.png`),
       fullPage: true,

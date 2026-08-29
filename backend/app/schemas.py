@@ -159,11 +159,37 @@ class RiskSignal(StrictModel):
     evidence: str = Field(min_length=1, max_length=300)
 
 
+class RemoteAccessTool(StrEnum):
+    """Remote-desktop tooling that fraudsters direct victims to install.
+
+    The client reports only these fixed identifiers; the server owns the
+    display names, so a compromised client cannot inject text into evidence.
+    """
+
+    ANYDESK = "ANYDESK"
+    TEAMVIEWER = "TEAMVIEWER"
+    RUSTDESK = "RUSTDESK"
+    AIRDROID = "AIRDROID"
+    OTHER = "OTHER"
+
+
+class EnvironmentSignals(StrictModel):
+    """Device-environment facts observed by the client at check time.
+
+    These are self-reported observations, not attested claims. They can only
+    raise risk, never lower it, so a client that under-reports harms only
+    itself and one that over-reports cannot suppress a real warning.
+    """
+
+    remote_access_tools: list[RemoteAccessTool] = Field(default_factory=list, max_length=8)
+
+
 class RiskScoreRequest(StrictModel):
     payment: PaymentDetails
     device_id: DeviceId
     context: ContextSignals | None = None
     context_token: ContextToken | None = None
+    environment: EnvironmentSignals | None = None
 
     @field_validator("device_id")
     @classmethod

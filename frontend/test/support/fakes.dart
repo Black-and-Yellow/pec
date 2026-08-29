@@ -28,6 +28,7 @@ final class FakeApi implements FinGuardApi {
   final Future<void>? parsePaymentGate;
   final RiskExplanation? explanationResult;
   ContextAnalysis? lastScoreContext;
+  List<String> lastRemoteAccessTools = const <String>[];
   int analyzeContextCount = 0;
   int parsePaymentCount = 0;
   String? lastParsedPayment;
@@ -110,8 +111,10 @@ final class FakeApi implements FinGuardApi {
     required Payment payment,
     required String deviceId,
     ContextAnalysis? context,
+    List<String> remoteAccessTools = const <String>[],
   }) async {
     lastScoreContext = context;
+    lastRemoteAccessTools = remoteAccessTools;
     return RiskScoreResult.fromApiJson(<String, Object?>{
       'assessment_id': 'test-assessment-1',
       'transaction_id': 'test-transaction-1',

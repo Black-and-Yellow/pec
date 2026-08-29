@@ -85,6 +85,7 @@ def score_payment(
             typical_amount=transactions.typical_completed_amount(request.device_id),
             indicator=indicators.find_vpa(request.payment.vpa),
             context=verified_context,
+            environment=request.environment,
         )
     )
     stored = transactions.save_assessment(

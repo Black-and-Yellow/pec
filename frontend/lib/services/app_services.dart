@@ -9,6 +9,7 @@ import 'demo_repository.dart';
 import 'external_actions.dart';
 import 'local_store.dart';
 import 'share_intake.dart';
+import 'threat_environment.dart';
 
 final class AppServices {
   const AppServices({
@@ -17,6 +18,7 @@ final class AppServices {
     required this.externalActions,
     required this.demos,
     this.shareIntake = const NoopShareIntake(),
+    this.threatEnvironment = const NoopThreatEnvironment(),
     this.auth,
   });
 
@@ -25,6 +27,7 @@ final class AppServices {
   final ExternalActions externalActions;
   final DemoRepository demos;
   final ShareIntake shareIntake;
+  final ThreatEnvironment threatEnvironment;
   final AuthController? auth;
 
   factory AppServices.production() {
@@ -37,6 +40,10 @@ final class AppServices {
       shareIntake: !kIsWeb && defaultTargetPlatform == TargetPlatform.android
           ? PlatformShareIntake()
           : const NoopShareIntake(),
+      threatEnvironment:
+          !kIsWeb && defaultTargetPlatform == TargetPlatform.android
+          ? const PlatformThreatEnvironment()
+          : const NoopThreatEnvironment(),
       auth: AuthController(
         api: AuthApiService(baseUri: AppConfig.apiBaseUri),
         store: SecureAuthStore(),

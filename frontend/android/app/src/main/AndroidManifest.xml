@@ -11,6 +11,22 @@
             <action android:name="android.intent.action.VIEW" />
             <data android:scheme="upi" />
         </intent>
+
+        <!--
+            Remote-access tooling checked before a payment handoff. Scammers
+            direct victims to install one of these so they can watch the screen
+            and read OTPs during a "verification" call. This is a fixed
+            allowlist so FinGuard never needs QUERY_ALL_PACKAGES, and it cannot
+            enumerate anything the user has installed beyond these entries.
+        -->
+        <package android:name="com.anydesk.anydeskandroid" />
+        <package android:name="com.teamviewer.quicksupport.market" />
+        <package android:name="com.teamviewer.quicksupport.addon.universal" />
+        <package android:name="com.teamviewer.host.market" />
+        <package android:name="com.teamviewer.teamviewer.market.mobile" />
+        <package android:name="com.carriez.flutter_hbb" />
+        <package android:name="com.sand.airdroid" />
+        <package android:name="com.sand.aircast" />
     </queries>
 
     <application

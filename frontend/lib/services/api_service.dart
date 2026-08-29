@@ -9,6 +9,7 @@ import '../models/context_analysis.dart';
 import '../models/payment.dart';
 import '../models/risk.dart';
 import '../models/risk_explanation.dart';
+import 'threat_environment.dart';
 
 abstract interface class FinGuardApi {
   Future<Payment> parsePayment(String upiUri);
@@ -17,6 +18,7 @@ abstract interface class FinGuardApi {
     required Payment payment,
     required String deviceId,
     ContextAnalysis? context,
+    List<String> remoteAccessTools,
   });
 
   Future<RiskExplanation> explainAssessment({
@@ -104,9 +106,14 @@ final class ApiService implements FinGuardApi {
     required Payment payment,
     required String deviceId,
     ContextAnalysis? context,
+    List<String> remoteAccessTools = const <String>[],
   }) async {
     final ContextAnalysis? validatedContext =
         context?.hasValidatedContext == true ? context : null;
+    final List<String> safeTools = remoteAccessTools
+        .where(knownRemoteAccessTools.contains)
+        .toSet()
+        .toList(growable: false);
     final Map<String, Object?> json =
         await _post('api/v1/risk/score', <String, Object?>{
           'payment': payment.toApiJson(),
@@ -114,6 +121,8 @@ final class ApiService implements FinGuardApi {
           if (validatedContext != null) 'context': validatedContext.toApiJson(),
           if (validatedContext != null)
             'context_token': validatedContext.integrityToken!,
+          if (safeTools.isNotEmpty)
+            'environment': <String, Object?>{'remote_access_tools': safeTools},
         });
     return RiskScoreResult.fromApiJson(json, requestedPayment: payment);
   }

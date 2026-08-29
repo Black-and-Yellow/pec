@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../models/context_analysis.dart';
 import '../models/payment.dart';
@@ -59,6 +60,11 @@ class _RiskResultScreenState extends State<RiskResultScreen> {
       status: 'generated',
       explanation: ReportBuilder.plainLanguageExplanation(widget.assessment),
     );
+    if (widget.assessment.level == RiskLevel.highRisk) {
+      // A brief, permission-free cue that registers before the user has
+      // read anything — deliberately fired once, not on every rebuild.
+      unawaited(HapticFeedback.heavyImpact());
+    }
     if (!widget.isDemo) {
       unawaited(_loadTrustedContact());
       if (widget.assessment.assessmentId != null) {
@@ -89,18 +95,40 @@ class _RiskResultScreenState extends State<RiskResultScreen> {
   @override
   Widget build(BuildContext context) {
     final bool wide = MediaQuery.sizeOf(context).width >= 900;
+    // Plain language first, the numeric score second: the target user is
+    // often reading this under stress, not auditing a scoring model.
+    // Payment facts and the full signal breakdown are one tap away rather
+    // than pre-scrolled past, so the actual decision (stop / continue) is
+    // reachable without wading through detail the user already has.
     final Widget result = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
         _ResultHeader(assessment: widget.assessment, isDemo: widget.isDemo),
-        const SizedBox(height: 18),
+        const SizedBox(height: 16),
         _ExplanationCard(explanation: _explanation, aiWording: _aiWording),
-        const SizedBox(height: 26),
-        _PaymentDetails(payment: widget.payment),
-        const SizedBox(height: 28),
-        _SignalList(assessment: widget.assessment),
+        const SizedBox(height: 18),
+        _ScoreSummary(assessment: widget.assessment),
+        const SizedBox(height: 24),
+        CollapsibleSection(
+          title: 'Payment details',
+          headerKey: const Key('payment_details_toggle'),
+          child: _PaymentDetails(payment: widget.payment),
+        ),
+        const SizedBox(height: 14),
+        CollapsibleSection(
+          title: 'Why do we say this?',
+          subtitle: widget.assessment.signals.isEmpty
+              ? 'No warning signals'
+              : '${widget.assessment.signals.length} signal(s)',
+          headerKey: const Key('why_this_score_toggle'),
+          child: _SignalListContent(assessment: widget.assessment),
+        ),
       ],
     );
+    final bool showQuickStop =
+        !wide &&
+        widget.paymentHandoffEnabled &&
+        widget.assessment.level != RiskLevel.safe;
     final Widget actions = _ActionPanel(
       assessment: widget.assessment,
       paymentHandoffEnabled: widget.paymentHandoffEnabled,
@@ -149,6 +177,12 @@ class _RiskResultScreenState extends State<RiskResultScreen> {
                 children: <Widget>[result, const SizedBox(height: 28), actions],
               ),
       ),
+      bottomNavigationBar: showQuickStop
+          ? _QuickStopBar(
+              isHighRisk: widget.assessment.level == RiskLevel.highRisk,
+              onStop: _stopHere,
+            )
+          : null,
     );
   }
 
@@ -185,6 +219,7 @@ class _RiskResultScreenState extends State<RiskResultScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
+            duration: const Duration(seconds: 5),
             content: Text(
               !_independentVerificationComplete
                   ? 'Complete the independent verification checklist first.'
@@ -214,6 +249,9 @@ class _RiskResultScreenState extends State<RiskResultScreen> {
           ? 'Open UPI app'
           : 'Open UPI app anyway',
       isDanger: level == RiskLevel.highRisk,
+      icon: level == RiskLevel.highRisk
+          ? Icons.warning_amber_outlined
+          : Icons.open_in_new,
     );
     if (!confirmed || !mounted) {
       return;
@@ -277,17 +315,12 @@ class _RiskResultScreenState extends State<RiskResultScreen> {
     );
   }
 
+  // No confirmation dialog here: the OS share sheet the user is about to
+  // see is itself a confirmation surface (they still pick an app and a
+  // contact there), so a modal in front of it would be a second gate for
+  // one decision — exactly the fatigue pattern that trains people to tap
+  // through dialogs without reading the ones that actually matter.
   Future<void> _shareTrustedContact() async {
-    final bool confirmed = await confirmAction(
-      context,
-      title: 'Open your share sheet?',
-      message:
-          'FinGuard will prepare a message with the recipient VPA and risk result. You choose the contact and must press Send yourself.',
-      confirmLabel: 'Open share sheet',
-    );
-    if (!confirmed || !mounted) {
-      return;
-    }
     try {
       final RenderBox? box = context.findRenderObject() as RenderBox?;
       final Rect? origin = box == null
@@ -328,19 +361,12 @@ class _RiskResultScreenState extends State<RiskResultScreen> {
     setState(() => _trustedContact = contact);
   }
 
+  // No confirmation dialog: the button itself already reads "Alert {name}
+  // on WhatsApp" — that label is the confirmation — and WhatsApp/SMS still
+  // requires the user to press Send there before anything actually goes.
   Future<void> _messageTrustedContact() async {
     final TrustedContact? contact = _trustedContact;
     if (contact == null) {
-      return;
-    }
-    final bool confirmed = await confirmAction(
-      context,
-      title: 'Message ${contact.name} on WhatsApp or SMS?',
-      message:
-          'FinGuard will try WhatsApp, then your SMS app, with a prepared message to ${contact.name}. You still have to press Send yourself. The number stays on this device and is never sent to FinGuard servers.',
-      confirmLabel: 'Open messaging app',
-    );
-    if (!confirmed || !mounted) {
       return;
     }
     try {
@@ -355,21 +381,11 @@ class _RiskResultScreenState extends State<RiskResultScreen> {
     }
   }
 
+  // No confirmation dialog: preparing a draft is fully local and reversible
+  // (nothing external happens until the incident screen's own copy/share/
+  // open-portal actions, which each keep their own confirmation).
   Future<void> _prepareReport({required bool alreadyPaid}) async {
     if (_preparingReport) {
-      return;
-    }
-    final bool confirmed = await confirmAction(
-      context,
-      title: alreadyPaid
-          ? 'Prepare a recovery draft?'
-          : 'Prepare a private report draft?',
-      message: alreadyPaid
-          ? 'FinGuard will prepare incident details and recovery steps. Nothing is sent to a bank or government service.'
-          : 'FinGuard will prepare a draft from the displayed payment and risk signals. Nothing is submitted or shared automatically.',
-      confirmLabel: 'Prepare draft',
-    );
-    if (!confirmed || !mounted) {
       return;
     }
     setState(() => _preparingReport = true);
@@ -471,45 +487,101 @@ class _ResultHeader extends StatelessWidget {
                 ),
             ],
           ),
-          const SizedBox(height: 18),
+          const SizedBox(height: 14),
           Text(headline, style: Theme.of(context).textTheme.headlineMedium),
-          const SizedBox(height: 10),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: <Widget>[
-              Text(
-                '${assessment.score}',
-                key: const Key('risk_score'),
-                style: Theme.of(context).textTheme.displaySmall?.copyWith(
-                  color: _statusColor(assessment.level),
-                ),
-              ),
-              Padding(
-                padding: const EdgeInsets.only(left: 4, bottom: 5),
-                child: Text(
-                  '/100 risk score',
-                  style: Theme.of(
-                    context,
-                  ).textTheme.titleMedium?.copyWith(color: AppColors.inkMuted),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          Text(
-            assessment.recommendedAction,
-            style: Theme.of(context).textTheme.bodyLarge,
-          ),
         ],
       ),
     );
   }
+}
+
+/// The numeric score and recommended action, deliberately smaller and
+/// secondary to [_ExplanationCard]'s plain-language sentence — a score out
+/// of 100 means little to a first-time or panicking user without the
+/// sentence explaining it, so the sentence leads and the number supports it.
+class _ScoreSummary extends StatelessWidget {
+  const _ScoreSummary({required this.assessment});
+
+  final RiskAssessment assessment;
+
+  @override
+  Widget build(BuildContext context) => Row(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: <Widget>[
+      Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: AppColors.surfaceMuted,
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.baseline,
+          textBaseline: TextBaseline.alphabetic,
+          children: <Widget>[
+            Text(
+              '${assessment.score}',
+              key: const Key('risk_score'),
+              style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                color: _statusColor(assessment.level),
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            Text(
+              '/100',
+              style: Theme.of(
+                context,
+              ).textTheme.labelMedium?.copyWith(color: AppColors.inkMuted),
+            ),
+          ],
+        ),
+      ),
+      const SizedBox(width: 12),
+      Expanded(
+        child: Text(
+          assessment.recommendedAction,
+          style: Theme.of(context).textTheme.bodyLarge,
+        ),
+      ),
+    ],
+  );
 
   Color _statusColor(RiskLevel level) => switch (level) {
     RiskLevel.safe => AppColors.safe,
     RiskLevel.caution => AppColors.caution,
     RiskLevel.highRisk => AppColors.danger,
   };
+}
+
+class _QuickStopBar extends StatelessWidget {
+  const _QuickStopBar({required this.isHighRisk, required this.onStop});
+
+  final bool isHighRisk;
+  final VoidCallback onStop;
+
+  @override
+  Widget build(BuildContext context) => Material(
+    elevation: 8,
+    color: Theme.of(context).scaffoldBackgroundColor,
+    child: SafeArea(
+      top: false,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
+        child: SizedBox(
+          width: double.infinity,
+          child: FilledButton.icon(
+            key: const Key('quick_stop_button'),
+            style: isHighRisk
+                ? FilledButton.styleFrom(backgroundColor: AppColors.danger)
+                : null,
+            onPressed: onStop,
+            icon: const Icon(Icons.stop_circle_outlined),
+            label: const Text('Stop here'),
+          ),
+        ),
+      ),
+    ),
+  );
 }
 
 class _ExplanationCard extends StatelessWidget {
@@ -673,8 +745,8 @@ class _Detail extends StatelessWidget {
   );
 }
 
-class _SignalList extends StatelessWidget {
-  const _SignalList({required this.assessment});
+class _SignalListContent extends StatelessWidget {
+  const _SignalListContent({required this.assessment});
 
   final RiskAssessment assessment;
 
@@ -682,8 +754,6 @@ class _SignalList extends StatelessWidget {
   Widget build(BuildContext context) => Column(
     crossAxisAlignment: CrossAxisAlignment.start,
     children: <Widget>[
-      Text('Why this score', style: Theme.of(context).textTheme.titleLarge),
-      const SizedBox(height: 6),
       Text(
         'Each displayed weight is a deterministic input to the policy score. No AI assigns the final verdict.',
         style: Theme.of(

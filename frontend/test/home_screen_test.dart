@@ -176,6 +176,15 @@ void main() {
     expect(find.byKey(const Key('risk_score')), findsOneWidget);
     expect(find.text('99'), findsOneWidget);
     expect(find.text('SEEDED DEMO DATA'), findsOneWidget);
+
+    // The signal breakdown is a closed-by-default disclosure now.
+    await tester.scrollUntilVisible(
+      find.byKey(const Key('why_this_score_toggle')),
+      250,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.tap(find.byKey(const Key('why_this_score_toggle')));
+    await tester.pump();
     expect(
       find.text('Recipient matches a seeded scam indicator'),
       findsOneWidget,

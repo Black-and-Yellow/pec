@@ -281,6 +281,7 @@ class _IncidentScreenState extends State<IncidentScreen> {
           'This opens your phone dialer for India\'s cyber-fraud helpline. '
           'FinGuard does not place the call or speak on your behalf.',
       confirmLabel: 'Open dialer',
+      icon: Icons.call_outlined,
     );
     if (!confirmed || !mounted) {
       return;
@@ -295,25 +296,20 @@ class _IncidentScreenState extends State<IncidentScreen> {
     }
   }
 
+  // No confirmation dialog: copying to the clipboard is local and trivially
+  // reversible — the snackbar below is the feedback, not a second gate.
   Future<void> _copy() async {
-    final bool confirmed = await confirmAction(
-      context,
-      title: 'Copy incident draft?',
-      message:
-          'This will copy the incident draft to your device clipboard. Review it before sharing it with anyone.',
-      confirmLabel: 'Copy to clipboard',
-    );
-    if (!confirmed || !mounted) {
-      return;
-    }
     await widget.services.externalActions.copyText(widget.report);
     if (!mounted) {
       return;
     }
     setState(() => _copied = true);
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(const SnackBar(content: Text('Incident draft copied.')));
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        duration: Duration(seconds: 5),
+        content: Text('Incident draft copied.'),
+      ),
+    );
   }
 
   Future<void> _openPortal() async {
@@ -323,6 +319,7 @@ class _IncidentScreenState extends State<IncidentScreen> {
       message:
           'This opens cybercrime.gov.in in your browser. FinGuard will not pre-fill or submit a complaint; you decide what to share.',
       confirmLabel: 'Open official portal',
+      icon: Icons.open_in_new,
     );
     if (!confirmed || !mounted) {
       return;
