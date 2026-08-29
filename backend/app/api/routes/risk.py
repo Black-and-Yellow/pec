@@ -64,9 +64,7 @@ def score_payment(
     integrity: Annotated[ContextIntegrityService, Depends(get_context_integrity)],
 ) -> RiskScoreResponse:
     try:
-        verified_context = integrity.context_for_score(
-            request.context, request.context_token
-        )
+        verified_context = integrity.context_for_score(request.context, request.context_token)
     except ContextIntegrityError as exc:
         raise HTTPException(
             status_code=422,
@@ -100,6 +98,7 @@ def score_payment(
             indicator=indicator,
             context=verified_context,
             environment=request.environment,
+            qr_provenance=request.qr_provenance,
             payee_trust=payee_trust,
         )
     )

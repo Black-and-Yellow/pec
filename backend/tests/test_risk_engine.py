@@ -6,7 +6,18 @@ import pytest
 
 from app.db.models import FraudIndicator
 from app.risk_policy import RiskWeights
-from app.schemas import ContextSignals, PaymentDetails, RiskLevel
+from app.schemas import (
+    ContextSignals,
+    PayeeTrust,
+    PaymentDetails,
+    QrProvenance,
+    RiskAssessmentPayload,
+    RiskLevel,
+    TrustGrade,
+    TrustPillar,
+    TrustPillarCode,
+    TrustPillarStatus,
+)
 from app.services.risk_engine import RiskEngine, RiskInputs
 
 
@@ -38,7 +49,9 @@ def test_known_safe_demo_transaction() -> None:
     )
     assert result.score == 0
     assert result.level is RiskLevel.SAFE
-    assert result.signals == []
+    assert [(signal.code, signal.weight) for signal in result.signals] == [
+        ("PAYEE_NAME_UNVERIFIED", 0)
+    ]
 
 
 def test_caution_demo_transaction() -> None:
@@ -244,3 +257,185 @@ def test_seeded_scam_remains_high_risk_without_ai_context() -> None:
     )
     assert result.score == 81
     assert result.level is RiskLevel.HIGH
+
+
+def _payee_trust(grade: TrustGrade) -> PayeeTrust:
+    return PayeeTrust(
+        vpa="merchant@okaxis",
+        score=90,
+        grade=grade,
+        headline="Synthetic trust report",
+        thin_file=False,
+        impersonation=False,
+        confidence="HIGH",
+        pillars=[
+            TrustPillar(
+                code=TrustPillarCode.IDENTITY,
+                label="Address identity",
+                points=30,
+                maximum=30,
+                status=TrustPillarStatus.STRONG,
+                evidence="Synthetic test-only trust evidence.",
+            )
+        ],
+        assessed_points=30,
+        assessable_maximum=30,
+        first_seen_at=None,
+        observed_days=365,
+        check_count=100,
+        distinct_device_count=50,
+        reported_count=0,
+        disclaimer="Synthetic test-only trust report.",
+    )
+
+
+def _signal_weight(result: RiskAssessmentPayload, code: str) -> int:
+    signals = result.signals
+    return next(signal.weight for signal in signals if signal.code == code)
+
+
+def test_trust_scaled_amount_orders_grades_without_unusual_amount_double_counting() -> None:
+    grades = [
+        TrustGrade.A_PLUS,
+        TrustGrade.A,
+        TrustGrade.B,
+        TrustGrade.C,
+        TrustGrade.D,
+    ]
+    results = [
+        RiskEngine().score(
+            RiskInputs(
+                payment=PaymentDetails(vpa="merchant@okaxis", amount="25000.00"),
+                known_payee=False,
+                typical_amount=Decimal("100"),
+                indicator=None,
+                payee_trust=_payee_trust(grade),
+            )
+        )
+        for grade in grades
+    ]
+    scores = [result.score for result in results]
+
+    assert scores == sorted(scores)
+    assert len(set(scores)) == len(scores)
+    assert _signal_weight(results[0], "AMOUNT_SCALED_BY_TRUST") == 0
+    assert all(_signal_weight(result, "AMOUNT_SCALED_BY_TRUST") <= 20 for result in results)
+    assert all(
+        "UNUSUAL_AMOUNT" not in {signal.code for signal in result.signals} for result in results
+    )
+
+
+def test_trust_scaled_amount_rises_with_amount() -> None:
+    engine = RiskEngine()
+    smaller = engine.score(
+        RiskInputs(
+            payment=PaymentDetails(vpa="merchant@okaxis", amount="2000.00"),
+            known_payee=False,
+            typical_amount=Decimal("100"),
+            indicator=None,
+            payee_trust=_payee_trust(TrustGrade.D),
+        )
+    )
+    larger = engine.score(
+        RiskInputs(
+            payment=PaymentDetails(vpa="merchant@okaxis", amount="25000.00"),
+            known_payee=False,
+            typical_amount=Decimal("100"),
+            indicator=None,
+            payee_trust=_payee_trust(TrustGrade.D),
+        )
+    )
+
+    assert _signal_weight(smaller, "AMOUNT_SCALED_BY_TRUST") < _signal_weight(
+        larger, "AMOUNT_SCALED_BY_TRUST"
+    )
+
+
+@pytest.mark.parametrize(
+    ("payment", "expected_weight"),
+    [
+        (PaymentDetails(vpa="merchant@okaxis"), None),
+        (PaymentDetails(vpa="merchant@okaxis", payee_name="Coffee Corner"), 0),
+        (PaymentDetails(vpa="random@okaxis", payee_name="SBI Refund Cell"), 14),
+        (PaymentDetails(vpa="sbi@oksbi", payee_name="SBI Collections"), 0),
+    ],
+)
+def test_payee_name_unverified_is_informational_unless_the_vpa_cannot_back_a_brand(
+    payment: PaymentDetails,
+    expected_weight: int | None,
+) -> None:
+    result = RiskEngine().score(
+        RiskInputs(
+            payment=payment,
+            known_payee=True,
+            typical_amount=None,
+            indicator=None,
+        )
+    )
+    names = [signal for signal in result.signals if signal.code == "PAYEE_NAME_UNVERIFIED"]
+
+    if expected_weight is None:
+        assert names == []
+    else:
+        assert len(names) == 1
+        assert names[0].weight == expected_weight
+
+
+@pytest.mark.parametrize(
+    ("payment", "provenance", "expected_weight"),
+    [
+        (
+            PaymentDetails(
+                vpa="merchant@okaxis",
+                amount="500.00",
+                transaction_reference="ORDER-42",
+            ),
+            None,
+            None,
+        ),
+        (
+            PaymentDetails(
+                vpa="merchant@okaxis",
+                amount="500.00",
+                transaction_reference="ORDER-42",
+            ),
+            QrProvenance(),
+            8,
+        ),
+        (
+            PaymentDetails(
+                vpa="merchant@okaxis",
+                amount="500.00",
+                transaction_reference="ORDER-42",
+            ),
+            QrProvenance(sign_present=True),
+            None,
+        ),
+        (
+            PaymentDetails(vpa="merchant@okaxis", amount="500.00"),
+            QrProvenance(),
+            None,
+        ),
+    ],
+)
+def test_qr_provenance_is_a_presence_only_risk_raiser(
+    payment: PaymentDetails,
+    provenance: QrProvenance | None,
+    expected_weight: int | None,
+) -> None:
+    result = RiskEngine().score(
+        RiskInputs(
+            payment=payment,
+            known_payee=True,
+            typical_amount=None,
+            indicator=None,
+            qr_provenance=provenance,
+        )
+    )
+    signals = [signal for signal in result.signals if signal.code == "QR_PROVENANCE_MISSING"]
+
+    if expected_weight is None:
+        assert signals == []
+    else:
+        assert len(signals) == 1
+        assert signals[0].weight == expected_weight

@@ -12,12 +12,13 @@ router = APIRouter(prefix="/payments", tags=["payments"])
 @router.post("/parse", response_model=ParsePaymentResponse)
 def parse_payment(request: ParsePaymentRequest) -> ParsePaymentResponse:
     try:
-        payment = parse_upi_uri(request.upi_uri)
+        parsed = parse_upi_uri(request.upi_uri)
     except PaymentParseError as exc:
         raise HTTPException(
             status_code=422, detail={"code": exc.code, "message": exc.message}
         ) from exc
     return ParsePaymentResponse(
-        payment=payment,
-        canonical_uri=build_upi_handoff_uri(payment),
+        payment=parsed.payment,
+        canonical_uri=build_upi_handoff_uri(parsed.payment),
+        qr_provenance=parsed.qr_provenance,
     )

@@ -71,6 +71,7 @@ def test_valid_local_analysis_token_is_the_only_context_used_for_score(
     assert {signal["code"] for signal in scored.json()["signals"]} == {
         "CONTEXT_URGENCY",
         "CONTEXT_KYC_THREAT",
+        "PAYEE_NAME_UNVERIFIED",
     }
 
 
