@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../models/context_analysis.dart';
+import '../models/payee_trust.dart';
 import '../models/payment.dart';
 import '../models/risk.dart';
 import '../models/risk_explanation.dart';
@@ -13,6 +14,7 @@ import '../services/app_services.dart';
 import '../services/report_builder.dart';
 import '../theme/app_theme.dart';
 import '../widgets/common.dart';
+import '../widgets/trust_report.dart';
 import 'incident_screen.dart';
 
 class RiskResultScreen extends StatefulWidget {
@@ -22,6 +24,7 @@ class RiskResultScreen extends StatefulWidget {
     required this.assessment,
     required this.paymentHandoffEnabled,
     super.key,
+    this.payeeTrust,
     this.contextAnalysis,
     this.consentToExternalAi = false,
     this.isDemo = false,
@@ -30,6 +33,11 @@ class RiskResultScreen extends StatefulWidget {
   final AppServices services;
   final Payment payment;
   final RiskAssessment assessment;
+
+  /// Absent for saved history entries and bundled demos, which were not
+  /// scored against the live reputation ledger.
+  final PayeeTrust? payeeTrust;
+
   final bool paymentHandoffEnabled;
   final ContextAnalysis? contextAnalysis;
   final bool consentToExternalAi;
@@ -108,6 +116,16 @@ class _RiskResultScreenState extends State<RiskResultScreen> {
         _ExplanationCard(explanation: _explanation, aiWording: _aiWording),
         const SizedBox(height: 18),
         _ScoreSummary(assessment: widget.assessment),
+        if (widget.payeeTrust case final PayeeTrust trust) ...<Widget>[
+          const SizedBox(height: 22),
+          TrustReportCard(
+            trust: trust,
+            // An adverse grade opens already: the reason is the point, and
+            // burying it behind a tap on the one screen that matters would
+            // be the same as not showing it.
+            initiallyExpanded: trust.isAdverse,
+          ),
+        ],
         const SizedBox(height: 24),
         CollapsibleSection(
           title: 'Payment details',

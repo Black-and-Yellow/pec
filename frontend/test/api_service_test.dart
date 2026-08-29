@@ -8,6 +8,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 
+import 'support/fakes.dart';
+
 Map<String, Object?> _riskEnvelope({
   required Map<String, Object?> payment,
   required int score,
@@ -18,10 +20,13 @@ Map<String, Object?> _riskEnvelope({
   String transactionId = 'transaction-1',
   List<Object?> signals = const <Object?>[],
   String recommendedAction = 'Review independently.',
+  Map<String, Object?>? payeeTrust,
 }) => <String, Object?>{
   'assessment_id': assessmentId,
   'transaction_id': transactionId,
   'payment': payment,
+  'payee_trust':
+      payeeTrust ?? payeeTrustJson(vpa: payment['vpa']! as String),
   'score': score,
   'level': level,
   'signals': signals,

@@ -6,6 +6,7 @@ import 'package:http/http.dart' as http;
 
 import '../config/app_config.dart';
 import '../models/context_analysis.dart';
+import '../models/payee_trust.dart';
 import '../models/payment.dart';
 import '../models/risk.dart';
 import '../models/risk_explanation.dart';
@@ -19,7 +20,11 @@ abstract interface class FinGuardApi {
     required String deviceId,
     ContextAnalysis? context,
     List<String> remoteAccessTools,
+    CallActivity callActivity,
   });
+
+  /// Reads a payee's standing without scoring or recording a payment.
+  Future<PayeeTrust> lookupPayeeTrust(String vpa);
 
   Future<RiskExplanation> explainAssessment({
     required String assessmentId,
@@ -107,6 +112,7 @@ final class ApiService implements FinGuardApi {
     required String deviceId,
     ContextAnalysis? context,
     List<String> remoteAccessTools = const <String>[],
+    CallActivity callActivity = CallActivity.none,
   }) async {
     final ContextAnalysis? validatedContext =
         context?.hasValidatedContext == true ? context : null;
@@ -114,6 +120,8 @@ final class ApiService implements FinGuardApi {
         .where(knownRemoteAccessTools.contains)
         .toSet()
         .toList(growable: false);
+    final bool hasEnvironment =
+        safeTools.isNotEmpty || callActivity != CallActivity.none;
     final Map<String, Object?> json =
         await _post('api/v1/risk/score', <String, Object?>{
           'payment': payment.toApiJson(),
@@ -121,11 +129,42 @@ final class ApiService implements FinGuardApi {
           if (validatedContext != null) 'context': validatedContext.toApiJson(),
           if (validatedContext != null)
             'context_token': validatedContext.integrityToken!,
-          if (safeTools.isNotEmpty)
-            'environment': <String, Object?>{'remote_access_tools': safeTools},
+          if (hasEnvironment)
+            'environment': <String, Object?>{
+              'remote_access_tools': safeTools,
+              'call_activity': callActivity.apiValue,
+            },
         });
     return RiskScoreResult.fromApiJson(json, requestedPayment: payment);
   }
+
+  @override
+  Future<PayeeTrust> lookupPayeeTrust(String vpa) async {
+    final String safeVpa = vpa.trim().toLowerCase();
+    if (!_vpaPattern.hasMatch(safeVpa)) {
+      throw const ApiException(
+        'Enter a UPI ID in the form name@handle.',
+      );
+    }
+    final Map<String, Object?> json = await _post('api/v1/trust/lookup', <String, Object?>{
+      'vpa': safeVpa,
+    });
+    final Map<String, Object?>? trust = _nestedMap(json, 'trust');
+    if (trust == null) {
+      throw const ApiException(
+        'The server did not return a reputation report.',
+      );
+    }
+    try {
+      return PayeeTrust.fromApiJson(trust);
+    } on FormatException catch (error) {
+      throw ApiException(error.message.toString());
+    }
+  }
+
+  static final RegExp _vpaPattern = RegExp(
+    r'^[A-Za-z0-9][A-Za-z0-9._-]{0,127}@[A-Za-z0-9][A-Za-z0-9.-]{0,63}$',
+  );
 
   @override
   Future<RiskExplanation> explainAssessment({

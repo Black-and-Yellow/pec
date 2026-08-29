@@ -96,6 +96,10 @@ class RiskAssessment(Base):
     level: Mapped[str] = mapped_column(String(16), index=True)
     recommended_action: Mapped[str] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    # Set the first time a user prepares an incident report from this
+    # assessment. It exists so a repeated "prepare report" tap cannot count
+    # as a second complaint against the payee.
+    reported_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     transaction: Mapped[Transaction] = relationship(back_populates="assessment")
     signals: Mapped[list[RiskSignalRecord]] = relationship(
@@ -120,6 +124,54 @@ class RiskSignalRecord(Base):
     evidence: Mapped[str] = mapped_column(String(300))
 
     assessment: Mapped[RiskAssessment] = relationship(back_populates="signals")
+
+
+class PayeeReputation(Base):
+    """Aggregate standing of one VPA across every device FinGuard serves.
+
+    This is FinGuard's own bureau ledger, and it is the honest answer to
+    "why not just read the payee's UPI history?" — NPCI does not expose one.
+    A credit bureau is not a regulator either: CIBIL holds what its member
+    banks contribute. This table holds what the FinGuard network observes.
+
+    It deliberately outlives the assessment records in ``transactions``,
+    which are pruned for privacy. Nothing here identifies a payer: only
+    counters, and the salted device digests in :class:`PayeeDeviceObservation`.
+    """
+
+    __tablename__ = "payee_reputation"
+
+    vpa: Mapped[str] = mapped_column(String(193), primary_key=True)
+    first_seen_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, index=True
+    )
+    last_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    check_count: Mapped[int] = mapped_column(Integer, default=0)
+    distinct_device_count: Mapped[int] = mapped_column(Integer, default=0)
+    safe_count: Mapped[int] = mapped_column(Integer, default=0)
+    caution_count: Mapped[int] = mapped_column(Integer, default=0)
+    high_count: Mapped[int] = mapped_column(Integer, default=0)
+    reported_count: Mapped[int] = mapped_column(Integer, default=0)
+    recent_new_device_count: Mapped[int] = mapped_column(Integer, default=0)
+    recent_window_started_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now
+    )
+
+
+class PayeeDeviceObservation(Base):
+    """One (payee, device) pair, so distinct reach cannot be inflated by repeats.
+
+    The device value stored here is the same salted digest the transaction
+    ledger uses, never a raw client identifier.
+    """
+
+    __tablename__ = "payee_device_observations"
+    __table_args__ = (UniqueConstraint("vpa", "device_key"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    vpa: Mapped[str] = mapped_column(String(193), index=True)
+    device_key: Mapped[str] = mapped_column(String(128), index=True)
+    first_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
 
 
 class FraudIndicator(Base):

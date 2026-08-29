@@ -4,6 +4,15 @@ on:
   push:
   pull_request:
   workflow_dispatch:
+    inputs:
+      device_api_base_url:
+        description: >-
+          Base URL the installable test APK should talk to, for example
+          https://your-tunnel.trycloudflare.com/ or http://192.168.1.5:8000/
+          on the same Wi-Fi. Plain HTTP is accepted because the artifact is a
+          debug build; release builds still require HTTPS.
+        required: false
+        default: "http://10.0.2.2:8000/"
 
 permissions:
   contents: read
@@ -106,6 +115,23 @@ jobs:
           # This is compile evidence only. Distribution requires an operator keystore.
           FINGUARD_ALLOW_DEMO_RELEASE: "true"
         run: flutter build apk --release --dart-define=API_BASE_URL=https://example.invalid/
+
+      # An installable artifact for testing on a real handset. It is a debug
+      # build on purpose: the release build refuses a non-HTTPS API, and a
+      # phone pointed at a laptop on the same Wi-Fi has no certificate.
+      - name: Build installable test APK
+        run: flutter build apk --debug --dart-define=API_BASE_URL="${DEVICE_API_BASE_URL}"
+        env:
+          DEVICE_API_BASE_URL: >-
+            ${{ github.event.inputs.device_api_base_url || 'http://10.0.2.2:8000/' }}
+
+      - name: Upload installable test APK
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: finguard-test-apk
+          path: frontend/build/app/outputs/flutter-apk/app-debug.apk
+          if-no-files-found: error
+          retention-days: 14
 
   web-e2e:
     name: Real-stack Web browser QA

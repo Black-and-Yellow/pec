@@ -183,6 +183,19 @@ class TransactionRepository:
         record = self._session.scalar(statement)
         return self._to_stored(record) if record else None
 
+    def mark_reported(self, assessment_id: str, *, now: datetime | None = None) -> bool:
+        """Stamp an assessment as reported. True only for the first stamp.
+
+        The caller uses the return value to decide whether a complaint has
+        actually been added, so tapping "prepare report" twice cannot count
+        as two people naming the same payee.
+        """
+        record = self._session.get(RiskAssessment, assessment_id)
+        if record is None or record.reported_at is not None:
+            return False
+        record.reported_at = now or datetime.now(UTC)
+        return True
+
     def list_assessments(
         self,
         device_id: str,

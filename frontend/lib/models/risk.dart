@@ -1,3 +1,4 @@
+import 'payee_trust.dart';
 import 'payment.dart';
 
 enum RiskLevel { safe, caution, highRisk }
@@ -250,6 +251,7 @@ final class RiskScoreResult {
   const RiskScoreResult._({
     required this.payment,
     required this.assessment,
+    required this.payeeTrust,
     required this.requiresConfirmation,
     required this.handoffPolicy,
     required this.assessedAt,
@@ -257,6 +259,7 @@ final class RiskScoreResult {
 
   final Payment payment;
   final RiskAssessment assessment;
+  final PayeeTrust payeeTrust;
   final bool requiresConfirmation;
   final RiskHandoffPolicy handoffPolicy;
   final DateTime assessedAt;
@@ -277,7 +280,10 @@ final class RiskScoreResult {
     }
 
     final RiskAssessment assessment = RiskAssessment.fromApiJson(json);
-    final Map<String, Object?> paymentJson = _requiredMap(json['payment']);
+    final Map<String, Object?> paymentJson = _requiredMap(
+      json['payment'],
+      'a valid payment',
+    );
     final Payment returnedPayment = Payment.fromApiJson(
       paymentJson,
       canonicalUpiUri: requestedPayment.upiUri,
@@ -313,20 +319,30 @@ final class RiskScoreResult {
       );
     }
 
+    final PayeeTrust payeeTrust = PayeeTrust.fromApiJson(
+      _requiredMap(json['payee_trust'], 'a payee trust report'),
+    );
+    if (payeeTrust.vpa != returnedPayment.payeeVpa.toLowerCase()) {
+      throw const FormatException(
+        'The risk response returned a trust report for a different recipient.',
+      );
+    }
+
     return RiskScoreResult._(
       payment: returnedPayment,
       assessment: assessment,
+      payeeTrust: payeeTrust,
       requiresConfirmation: rawRequiresConfirmation,
       handoffPolicy: handoffPolicy,
       assessedAt: _requiredAssessedAt(json['assessed_at']),
     );
   }
 
-  static Map<String, Object?> _requiredMap(Object? value) {
+  static Map<String, Object?> _requiredMap(Object? value, String description) {
     if (value is! Map<Object?, Object?> ||
         !value.keys.every((Object? key) => key is String)) {
-      throw const FormatException(
-        'The risk response did not include a valid payment.',
+      throw FormatException(
+        'The risk response did not include $description.',
       );
     }
     return value.cast<String, Object?>();
@@ -369,6 +385,7 @@ final class RiskScoreResult {
     'assessment_id',
     'transaction_id',
     'payment',
+    'payee_trust',
     'score',
     'level',
     'signals',

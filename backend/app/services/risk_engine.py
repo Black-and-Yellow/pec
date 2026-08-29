@@ -8,13 +8,17 @@ from typing import Any
 from app.db.models import FraudIndicator
 from app.risk_policy import THRESHOLDS, WEIGHTS, RiskThresholds, RiskWeights
 from app.schemas import (
+    ACTIVE_CALL_STATES,
+    CallActivity,
     ContextSignals,
     EnvironmentSignals,
+    PayeeTrust,
     PaymentDetails,
     RemoteAccessTool,
     RiskAssessmentPayload,
     RiskLevel,
     RiskSignal,
+    TrustGrade,
 )
 
 REMOTE_ACCESS_TOOL_LABELS: dict[RemoteAccessTool, str] = {
@@ -23,6 +27,14 @@ REMOTE_ACCESS_TOOL_LABELS: dict[RemoteAccessTool, str] = {
     RemoteAccessTool.RUSTDESK: "RustDesk",
     RemoteAccessTool.AIRDROID: "AirDroid",
     RemoteAccessTool.OTHER: "a remote-access tool",
+}
+
+CALL_ACTIVITY_LABELS: dict[CallActivity, str] = {
+    CallActivity.CELLULAR: "a phone call",
+    CallActivity.VOICE_OVER_IP: "an internet call, such as WhatsApp",
+    CallActivity.UNKNOWN: "a call",
+    CallActivity.RINGING: "an incoming call",
+    CallActivity.NONE: "no call",
 }
 
 SUSPICIOUS_NOTE_PATTERN = re.compile(
@@ -35,6 +47,9 @@ CORROBORATING_SIGNAL_CODES = frozenset(
     {
         "SEEDED_FRAUD_MATCH",
         "REMOTE_ACCESS_TOOL_PRESENT",
+        "ACTIVE_CALL_DURING_CHECK",
+        "SCREEN_SHARE_DURING_CALL",
+        "PAYEE_IDENTITY_IMPERSONATION",
         "SUSPICIOUS_PAYMENT_NOTE",
         "SEEDED_IDENTIFIER_RELATIONSHIP",
         "CONTEXT_IMPERSONATION",
@@ -54,6 +69,7 @@ class RiskInputs:
     indicator: FraudIndicator | None
     context: ContextSignals | None = None
     environment: EnvironmentSignals | None = None
+    payee_trust: PayeeTrust | None = None
 
 
 class RiskEngine:
@@ -71,6 +87,11 @@ class RiskEngine:
         payment = inputs.payment
 
         remote_tools = list(inputs.environment.remote_access_tools) if inputs.environment else []
+        call_activity = (
+            inputs.environment.call_activity if inputs.environment else CallActivity.NONE
+        )
+        on_active_call = call_activity in ACTIVE_CALL_STATES
+
         if remote_tools:
             signals.append(
                 RiskSignal(
@@ -83,6 +104,52 @@ class RiskEngine:
                         "a payment."
                     ),
                 )
+            )
+
+        if on_active_call:
+            signals.append(
+                RiskSignal(
+                    code="ACTIVE_CALL_DURING_CHECK",
+                    label="You are on a call while making this payment",
+                    weight=self._weights.active_call,
+                    evidence=(
+                        f"FinGuard saw {CALL_ACTIVITY_LABELS[call_activity]} in progress when "
+                        "this check started. Almost every large UPI fraud is talked through "
+                        "live, because a caller can override hesitation that a message cannot."
+                    ),
+                )
+            )
+        elif call_activity is CallActivity.RINGING:
+            signals.append(
+                RiskSignal(
+                    code="INCOMING_CALL_DURING_CHECK",
+                    label="A call is ringing while you pay",
+                    weight=self._weights.incoming_call_ringing,
+                    evidence=(
+                        "An incoming call was ringing when this check started. Do not let a "
+                        "caller walk you through a payment."
+                    ),
+                )
+            )
+
+        if on_active_call and remote_tools:
+            signals.append(
+                RiskSignal(
+                    code="SCREEN_SHARE_DURING_CALL",
+                    label="Someone can watch this screen while talking to you",
+                    weight=self._weights.call_with_remote_access,
+                    evidence=(
+                        "A remote-access app and a live call at the same time is the exact "
+                        "setup used for digital-arrest and fake-support frauds. Hang up and "
+                        "uninstall the app before paying anyone."
+                    ),
+                )
+            )
+
+        trust = inputs.payee_trust
+        if trust is not None:
+            signals.extend(
+                self._trust_signals(trust, seeded_match=inputs.indicator is not None)
             )
 
         if inputs.indicator is not None:
@@ -218,6 +285,45 @@ class RiskEngine:
 
     def _has_relationship_evidence(self, indicator: FraudIndicator) -> bool:
         return indicator.report_count > 1 or self._relationship_count(indicator) > 0
+
+    def _trust_signals(
+        self, trust: PayeeTrust, *, seeded_match: bool
+    ) -> list[RiskSignal]:
+        """Turn the payee reputation report into scoring signals.
+
+        A thin file deliberately adds nothing: FIRST_TIME_PAYEE already says
+        the payer has no history with this recipient, and charging a genuine
+        new shop twice for the same fact would make the score unreadable.
+        """
+        signals: list[RiskSignal] = []
+        if trust.impersonation:
+            signals.append(
+                RiskSignal(
+                    code="PAYEE_IDENTITY_IMPERSONATION",
+                    label="The recipient address imitates an organisation",
+                    weight=self._weights.payee_identity_impersonation,
+                    evidence=trust.headline
+                    + ". Read the address itself, not the name shown beside it.",
+                )
+            )
+        elif (
+            not trust.thin_file
+            and not seeded_match
+            and trust.grade in {TrustGrade.C, TrustGrade.D}
+        ):
+            signals.append(
+                RiskSignal(
+                    code="PAYEE_TRUST_LOW",
+                    label="This recipient has a weak record on the FinGuard network",
+                    weight=self._weights.payee_trust_low,
+                    evidence=(
+                        f"Payee trust grade {trust.grade.value} ({trust.score or 0}/100) "
+                        f"across {trust.check_count} checks from "
+                        f"{trust.distinct_device_count} devices."
+                    ),
+                )
+            )
+        return signals
 
     def _context_signals(self, context: ContextSignals) -> list[RiskSignal]:
         definitions = (

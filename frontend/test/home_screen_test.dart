@@ -21,7 +21,7 @@ void main() {
     expect(normalizeSharedText(oversized), hasLength(maxSharedTextLength));
   });
 
-  testWidgets('home presents the three focused entry points', (
+  testWidgets('home presents the four focused entry points', (
     WidgetTester tester,
   ) async {
     final FakeApi api = FakeApi();
@@ -37,10 +37,12 @@ void main() {
     expect(find.byType(HomeScreen), findsOneWidget);
     expect(find.text('Scan QR'), findsOneWidget);
     expect(find.text('Paste UPI Link'), findsOneWidget);
+    expect(find.text('Check a UPI ID'), findsOneWidget);
     expect(find.text('Check suspicious message'), findsOneWidget);
-    expect(find.byType(WorkspaceAction), findsNWidgets(3));
+    expect(find.byType(WorkspaceAction), findsNWidgets(4));
     expect(find.byKey(const Key('scan_qr_button')), findsOneWidget);
     expect(find.byKey(const Key('paste_upi_button')), findsOneWidget);
+    expect(find.byKey(const Key('check_payee_button')), findsOneWidget);
     expect(find.byKey(const Key('message_check_button')), findsOneWidget);
     expect(
       Theme.of(tester.element(find.byType(AppBar))).appBarTheme.backgroundColor,

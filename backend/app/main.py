@@ -16,7 +16,17 @@ from starlette.middleware.base import RequestResponseEndpoint
 from starlette.responses import Response
 
 from app import __version__
-from app.api.routes import auth, context, demo, health, history, payments, response, risk
+from app.api.routes import (
+    auth,
+    context,
+    demo,
+    health,
+    history,
+    payments,
+    response,
+    risk,
+    trust,
+)
 from app.config import Settings
 from app.db.database import Database
 from app.db.seed import seed_demo_data
@@ -198,6 +208,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     api.include_router(auth.router, prefix=prefix)
     api.include_router(payments.router, prefix=prefix)
     api.include_router(risk.router, prefix=prefix)
+    api.include_router(trust.router, prefix=prefix)
     api.include_router(context.router, prefix=prefix)
     api.include_router(response.router, prefix=prefix)
     api.include_router(history.router, prefix=prefix)

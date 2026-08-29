@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.api.dependencies import get_session, get_settings
 from app.config import Settings
+from app.repositories.reputation_repository import ReputationRepository
 from app.repositories.transaction_repository import TransactionRepository
 from app.schemas import PreparedResponse, ResponsePrepareRequest
 from app.services.response_builder import build_prepared_response
@@ -30,7 +31,8 @@ def prepare_response(
             },
         )
 
-    stored = TransactionRepository(session).get_assessment(
+    transactions = TransactionRepository(session)
+    stored = transactions.get_assessment(
         assessment.assessment_id,
         retention_days=settings.assessment_retention_days,
     )
@@ -50,6 +52,13 @@ def prepare_response(
                 "message": "The payment does not match the saved risk assessment",
             },
         )
+
+    # Preparing a report is a person naming this payee as the source of harm.
+    # It is the strongest conduct signal the network has, so it is counted
+    # once per assessment and never on a repeat tap.
+    if transactions.mark_reported(assessment.assessment_id):
+        ReputationRepository(session).record_report(stored.payment.vpa)
+        session.commit()
 
     return build_prepared_response(
         payment=stored.payment,

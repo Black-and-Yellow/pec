@@ -6,6 +6,7 @@ import '../models/payment.dart';
 import '../models/risk.dart';
 import '../services/api_service.dart';
 import '../services/app_services.dart';
+import '../services/threat_environment.dart';
 import '../theme/app_theme.dart';
 import '../widgets/common.dart';
 import 'risk_result_screen.dart';
@@ -176,17 +177,24 @@ class _PasteScreenState extends State<PasteScreen> {
       final Payment payment = await widget.services.api.parsePayment(raw);
       final String deviceId = await widget.services.store.deviceId();
       // Read the device environment at check time so the deterministic policy
-      // can weigh an active remote-access tool alongside the payment signals.
+      // can weigh an active remote-access tool and a live call alongside the
+      // payment signals. Both are single readings taken now, not subscriptions:
+      // a call that starts after this result is on screen is invisible to us.
       final List<String> remoteAccessTools = await widget
           .services
           .threatEnvironment
           .remoteAccessTools();
+      final CallActivity callActivity = await widget
+          .services
+          .threatEnvironment
+          .callActivity();
       final RiskScoreResult scoreResult = await widget.services.api
           .scorePayment(
             payment: payment,
             deviceId: deviceId,
             context: validatedContext,
             remoteAccessTools: remoteAccessTools,
+            callActivity: callActivity,
           );
       final Payment validatedPayment = scoreResult.payment;
       final RiskAssessment assessment = scoreResult.assessment;
@@ -214,6 +222,7 @@ class _PasteScreenState extends State<PasteScreen> {
             services: widget.services,
             payment: validatedPayment,
             assessment: assessment,
+            payeeTrust: scoreResult.payeeTrust,
             paymentHandoffEnabled: scoreResult.paymentHandoffEnabled,
             contextAnalysis: validatedContext,
             consentToExternalAi: widget.consentToExternalAi,

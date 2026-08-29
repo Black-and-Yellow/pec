@@ -2,6 +2,19 @@
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-permission android:name="android.permission.INTERNET" />
 
+    <!--
+        Read once, at the moment the user runs a safety check, to see whether a
+        call is in progress while they pay. Fraud of this size is talked
+        through live, so a payment made mid-call is materially riskier than the
+        same payment made alone.
+
+        FinGuard never registers a call listener, never runs in the background,
+        and never reads a number, a call log, or a subscriber identifier. The
+        feature is optional: without this permission the check falls back to the
+        audio mode, which needs no permission at all.
+    -->
+    <uses-permission android:name="android.permission.READ_PHONE_STATE" />
+
     <uses-feature
         android:name="android.hardware.camera"
         android:required="false" />

@@ -2,6 +2,8 @@ import 'package:finguard/models/payment.dart';
 import 'package:finguard/models/risk.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'support/fakes.dart';
+
 const Object _omitted = Object();
 
 void main() {
@@ -54,15 +56,52 @@ void main() {
     Object? requiresConfirmation = true,
     Object? handoffPolicy = 'PAUSED',
     Object? assessedAt = '2026-08-12T10:00:00.123456Z',
+    Object? payeeTrust = _omitted,
   }) => <String, Object?>{
     ...validResponse(score: score, level: level, signals: signals),
     'payment': identical(payment, _omitted)
         ? requestedPayment.toApiJson()
         : payment,
+    'payee_trust': identical(payeeTrust, _omitted)
+        ? payeeTrustJson(vpa: requestedPayment.payeeVpa)
+        : payeeTrust,
     'requires_confirmation': requiresConfirmation,
     'handoff_policy': handoffPolicy,
     'assessed_at': assessedAt,
   };
+
+  test('a trust report for a different recipient is rejected', () {
+    expect(
+      () => RiskScoreResult.fromApiJson(
+        validEnvelope(payeeTrust: payeeTrustJson(vpa: 'someone.else@upi')),
+        requestedPayment: requestedPayment,
+      ),
+      throwsA(isA<FormatException>()),
+    );
+  });
+
+  test('a response without a trust report is rejected', () {
+    final Map<String, Object?> envelope = validEnvelope()
+      ..remove('payee_trust');
+    expect(
+      () => RiskScoreResult.fromApiJson(
+        envelope,
+        requestedPayment: requestedPayment,
+      ),
+      throwsA(isA<FormatException>()),
+    );
+  });
+
+  test('a valid envelope carries the payee trust report through', () {
+    final RiskScoreResult result = RiskScoreResult.fromApiJson(
+      validEnvelope(),
+      requestedPayment: requestedPayment,
+    );
+
+    expect(result.payeeTrust.vpa, 'merchant@upi');
+    expect(result.payeeTrust.thinFile, isTrue);
+    expect(result.payeeTrust.score, isNull);
+  });
 
   test('valid live risk response keeps explainable server verdict', () {
     final RiskAssessment result = RiskAssessment.fromApiJson(validResponse());

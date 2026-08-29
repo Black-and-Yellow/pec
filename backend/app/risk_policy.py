@@ -7,6 +7,11 @@ from dataclasses import dataclass
 class RiskWeights:
     seeded_fraud_match: int = 30
     remote_access_tool: int = 25
+    active_call: int = 18
+    incoming_call_ringing: int = 6
+    call_with_remote_access: int = 12
+    payee_identity_impersonation: int = 20
+    payee_trust_low: int = 10
     first_time_payee: int = 18
     amount_not_specified: int = 5
     amount_not_specified_corroborated: int = 20

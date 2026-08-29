@@ -4,6 +4,7 @@ import 'dart:ui';
 
 import 'package:finguard/models/auth_session.dart';
 import 'package:finguard/models/context_analysis.dart';
+import 'package:finguard/models/payee_trust.dart';
 import 'package:finguard/models/payment.dart';
 import 'package:finguard/models/risk.dart';
 import 'package:finguard/models/risk_explanation.dart';
@@ -12,6 +13,7 @@ import 'package:finguard/services/auth_api.dart';
 import 'package:finguard/services/auth_store.dart';
 import 'package:finguard/services/external_actions.dart';
 import 'package:finguard/services/share_intake.dart';
+import 'package:finguard/services/threat_environment.dart';
 
 final class FakeApi implements FinGuardApi {
   FakeApi({
@@ -29,6 +31,11 @@ final class FakeApi implements FinGuardApi {
   final RiskExplanation? explanationResult;
   ContextAnalysis? lastScoreContext;
   List<String> lastRemoteAccessTools = const <String>[];
+  CallActivity lastCallActivity = CallActivity.none;
+  String? lastTrustLookupVpa;
+  int trustLookupCount = 0;
+  PayeeTrust? trustLookupResult;
+  ApiException? trustLookupError;
   int analyzeContextCount = 0;
   int parsePaymentCount = 0;
   String? lastParsedPayment;
@@ -107,18 +114,33 @@ final class FakeApi implements FinGuardApi {
   }
 
   @override
+  Future<PayeeTrust> lookupPayeeTrust(String vpa) async {
+    trustLookupCount += 1;
+    lastTrustLookupVpa = vpa;
+    final ApiException? error = trustLookupError;
+    if (error != null) {
+      throw error;
+    }
+    return trustLookupResult ??
+        PayeeTrust.fromApiJson(payeeTrustJson(vpa: vpa.trim().toLowerCase()));
+  }
+
+  @override
   Future<RiskScoreResult> scorePayment({
     required Payment payment,
     required String deviceId,
     ContextAnalysis? context,
     List<String> remoteAccessTools = const <String>[],
+    CallActivity callActivity = CallActivity.none,
   }) async {
     lastScoreContext = context;
     lastRemoteAccessTools = remoteAccessTools;
+    lastCallActivity = callActivity;
     return RiskScoreResult.fromApiJson(<String, Object?>{
       'assessment_id': 'test-assessment-1',
       'transaction_id': 'test-transaction-1',
       'payment': payment.toApiJson(),
+      'payee_trust': payeeTrustJson(vpa: payment.payeeVpa),
       'score': 10,
       'level': 'SAFE',
       'signals': <Object?>[
@@ -330,4 +352,85 @@ final class FakeAuthApi implements FinGuardAuthApi {
     required String password,
     required String displayName,
   }) async => session;
+}
+
+/// A trust report fixture shaped exactly like the server envelope, so a
+/// change to the model's validation fails these tests rather than passing
+/// them on a hand-relaxed map.
+Map<String, Object?> payeeTrustJson({
+  String vpa = 'merchant@upi',
+  String grade = 'NEW',
+  int? score,
+  bool thinFile = true,
+  bool impersonation = false,
+  int checkCount = 0,
+  int distinctDeviceCount = 0,
+  int reportedCount = 0,
+  int observedDays = 0,
+}) => <String, Object?>{
+  'vpa': vpa,
+  'score': score,
+  'grade': grade,
+  'headline': 'No track record yet: treat this as a stranger',
+  'thin_file': thinFile,
+  'impersonation': impersonation,
+  'confidence': thinFile ? 'LOW' : 'HIGH',
+  'pillars': <Object?>[
+    <String, Object?>{
+      'code': 'IDENTITY',
+      'label': 'Address identity',
+      'points': 28,
+      'maximum': 30,
+      'status': 'STRONG',
+      'evidence': 'The address structure raised none of the checks applied to it.',
+    },
+    <String, Object?>{
+      'code': 'TENURE',
+      'label': 'How long the network has known it',
+      'points': thinFile ? 0 : 25,
+      'maximum': 25,
+      'status': thinFile ? 'NO_DATA' : 'STRONG',
+      'evidence': 'Fixture tenure evidence.',
+    },
+  ],
+  'assessed_points': thinFile ? 28 : 53,
+  'assessable_maximum': thinFile ? 30 : 55,
+  'first_seen_at': thinFile ? null : '2025-01-01T00:00:00Z',
+  'observed_days': observedDays,
+  'check_count': checkCount,
+  'distinct_device_count': distinctDeviceCount,
+  'reported_count': reportedCount,
+  'disclaimer':
+      'FinGuard network reputation, not an NPCI, bank, or credit bureau rating.',
+};
+
+final class FakeThreatEnvironment implements ThreatEnvironment {
+  FakeThreatEnvironment({
+    this.tools = const <String>[],
+    this.call = CallActivity.none,
+    this.permissionGranted = false,
+    this.grantOnRequest = true,
+  });
+
+  List<String> tools;
+  CallActivity call;
+  bool permissionGranted;
+  bool grantOnRequest;
+  int permissionRequestCount = 0;
+
+  @override
+  Future<List<String>> remoteAccessTools() async => tools;
+
+  @override
+  Future<CallActivity> callActivity() async => call;
+
+  @override
+  Future<bool> hasCallStatePermission() async => permissionGranted;
+
+  @override
+  Future<bool> requestCallStatePermission() async {
+    permissionRequestCount += 1;
+    permissionGranted = grantOnRequest;
+    return permissionGranted;
+  }
 }

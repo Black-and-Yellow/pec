@@ -1,0 +1,98 @@
+[
+  {
+    "vpa": "coffee.corner@okaxis",
+    "first_seen_days_ago": 612,
+    "last_seen_days_ago": 0,
+    "check_count": 1483,
+    "distinct_device_count": 412,
+    "safe_count": 1471,
+    "caution_count": 12,
+    "high_count": 0,
+    "reported_count": 0,
+    "recent_new_device_count": 9
+  },
+  {
+    "vpa": "fresh.grocer@okhdfcbank",
+    "first_seen_days_ago": 398,
+    "last_seen_days_ago": 1,
+    "check_count": 604,
+    "distinct_device_count": 168,
+    "safe_count": 597,
+    "caution_count": 7,
+    "high_count": 0,
+    "reported_count": 0,
+    "recent_new_device_count": 6
+  },
+  {
+    "vpa": "city.auto@okicici",
+    "first_seen_days_ago": 240,
+    "last_seen_days_ago": 2,
+    "check_count": 121,
+    "distinct_device_count": 44,
+    "safe_count": 118,
+    "caution_count": 3,
+    "high_count": 0,
+    "reported_count": 0,
+    "recent_new_device_count": 3
+  },
+  {
+    "vpa": "utility.board@oksbi",
+    "first_seen_days_ago": 505,
+    "last_seen_days_ago": 3,
+    "check_count": 890,
+    "distinct_device_count": 260,
+    "safe_count": 881,
+    "caution_count": 9,
+    "high_count": 0,
+    "reported_count": 0,
+    "recent_new_device_count": 4
+  },
+  {
+    "vpa": "chai.point@okicici",
+    "first_seen_days_ago": 96,
+    "last_seen_days_ago": 1,
+    "check_count": 38,
+    "distinct_device_count": 14,
+    "safe_count": 36,
+    "caution_count": 2,
+    "high_count": 0,
+    "reported_count": 0,
+    "recent_new_device_count": 2
+  },
+  {
+    "vpa": "market.seller@okaxis",
+    "first_seen_days_ago": 21,
+    "last_seen_days_ago": 0,
+    "check_count": 11,
+    "distinct_device_count": 9,
+    "safe_count": 4,
+    "caution_count": 6,
+    "high_count": 1,
+    "reported_count": 0,
+    "recent_new_device_count": 5
+  },
+  {
+    "vpa": "secure-kyc-update@okaxis",
+    "first_seen_days_ago": 9,
+    "last_seen_days_ago": 0,
+    "check_count": 64,
+    "distinct_device_count": 57,
+    "safe_count": 0,
+    "caution_count": 6,
+    "high_count": 58,
+    "reported_count": 11,
+    "recent_new_device_count": 57
+  },
+  {
+    "vpa": "refund-desk@oksbi",
+    "first_seen_days_ago": 12,
+    "last_seen_days_ago": 0,
+    "check_count": 29,
+    "distinct_device_count": 26,
+    "safe_count": 0,
+    "caution_count": 4,
+    "high_count": 25,
+    "reported_count": 6,
+    "recent_new_device_count": 24
+  }
+]

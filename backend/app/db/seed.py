@@ -1,14 +1,14 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
 from typing import Any
 
 from sqlalchemy.orm import Session
 
-from app.db.models import FraudIndicator, Transaction
+from app.db.models import FraudIndicator, PayeeReputation, Transaction
 
 DATA_DIRECTORY = Path(__file__).resolve().parents[2] / "data"
 
@@ -33,6 +33,27 @@ def seed_demo_data(session: Session) -> None:
         indicator.report_count = int(item["report_count"])
         indicator.relationships = item["relationships"]
         indicator.source = item["source"]
+
+    # Seeded network standing, so the trust score has a bureau to consult in a
+    # demo. Offsets are relative to now: a fixture pinned to a fixed date would
+    # silently age into "long established" for whatever address it names.
+    now = datetime.now(UTC)
+    for item in _load_json("demo_payee_reputation.json"):
+        vpa = item["vpa"].strip().lower()
+        reputation = session.get(PayeeReputation, vpa)
+        if reputation is None:
+            reputation = PayeeReputation(vpa=vpa)
+            session.add(reputation)
+        reputation.first_seen_at = now - timedelta(days=int(item["first_seen_days_ago"]))
+        reputation.last_seen_at = now - timedelta(days=int(item["last_seen_days_ago"]))
+        reputation.check_count = int(item["check_count"])
+        reputation.distinct_device_count = int(item["distinct_device_count"])
+        reputation.safe_count = int(item["safe_count"])
+        reputation.caution_count = int(item["caution_count"])
+        reputation.high_count = int(item["high_count"])
+        reputation.reported_count = int(item["reported_count"])
+        reputation.recent_new_device_count = int(item["recent_new_device_count"])
+        reputation.recent_window_started_at = now
 
     for item in _load_json("demo_transaction_history.json"):
         transaction = session.get(Transaction, item["id"])

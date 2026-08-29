@@ -16,6 +16,7 @@ import 'paste_screen.dart';
 import 'risk_lab_screen.dart';
 import 'risk_result_screen.dart';
 import 'scanner_screen.dart';
+import 'trust_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({required this.services, super.key});
@@ -100,6 +101,7 @@ class _HomeScreenState extends State<HomeScreen> {
             onScan: _openScanner,
             onPaste: _openPaste,
             onMessage: _openContext,
+            onCheckPayee: _openTrust,
           );
           final Widget demos = _DemoSection(
             loadingId: _loadingDemoId,
@@ -156,6 +158,16 @@ class _HomeScreenState extends State<HomeScreen> {
       MaterialPageRoute<void>(
         builder: (BuildContext context) =>
             ContextScreen(services: widget.services),
+      ),
+    ),
+  );
+
+  void _openTrust() => unawaited(
+    Navigator.push<void>(
+      context,
+      MaterialPageRoute<void>(
+        builder: (BuildContext context) =>
+            TrustScreen(services: widget.services),
       ),
     ),
   );
@@ -336,11 +348,13 @@ class _PrimaryActions extends StatelessWidget {
     required this.onScan,
     required this.onPaste,
     required this.onMessage,
+    required this.onCheckPayee,
   });
 
   final VoidCallback onScan;
   final VoidCallback onPaste;
   final VoidCallback onMessage;
+  final VoidCallback onCheckPayee;
 
   @override
   Widget build(BuildContext context) => WorkspacePanel(
@@ -382,6 +396,14 @@ class _PrimaryActions extends StatelessWidget {
           label: 'Paste UPI Link',
           description: 'Review a copied UPI payment request.',
           onTap: onPaste,
+        ),
+        const Divider(height: 1, indent: 68),
+        WorkspaceAction(
+          key: const Key('check_payee_button'),
+          icon: Icons.travel_explore_outlined,
+          label: 'Check a UPI ID',
+          description: 'See a payee’s reputation before you deal with them.',
+          onTap: onCheckPayee,
         ),
         const Divider(height: 1, indent: 68),
         WorkspaceAction(
