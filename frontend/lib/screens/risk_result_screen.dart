@@ -464,35 +464,50 @@ class _ResultHeader extends StatelessWidget {
     };
     return Semantics(
       header: true,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          Wrap(
-            spacing: 10,
-            runSpacing: 10,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            children: <Widget>[
-              RiskBadge(level: assessment.level),
-              if (isDemo)
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 7,
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: _statusSurface(assessment.level),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Wrap(
+              spacing: 10,
+              runSpacing: 10,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: <Widget>[
+                RiskBadge(level: assessment.level),
+                if (isDemo)
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 7,
+                    ),
+                    decoration: BoxDecoration(
+                      color: AppColors.surface.withValues(alpha: 0.7),
+                      border: Border.all(color: AppColors.border),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Text('SEEDED DEMO DATA'),
                   ),
-                  decoration: BoxDecoration(
-                    border: Border.all(color: AppColors.border),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: const Text('SEEDED DEMO DATA'),
-                ),
-            ],
-          ),
-          const SizedBox(height: 14),
-          Text(headline, style: Theme.of(context).textTheme.headlineMedium),
-        ],
+              ],
+            ),
+            const SizedBox(height: 18),
+            Text(headline, style: Theme.of(context).textTheme.headlineMedium),
+          ],
+        ),
       ),
     );
   }
+
+  Color _statusSurface(RiskLevel level) => switch (level) {
+    RiskLevel.safe => AppColors.safeSurface,
+    RiskLevel.caution => AppColors.cautionSurface,
+    RiskLevel.highRisk => AppColors.dangerSurface,
+  };
 }
 
 /// The numeric score and recommended action, deliberately smaller and
@@ -596,8 +611,11 @@ class _ExplanationCard extends StatelessWidget {
     container: true,
     liveRegion: true,
     label: 'Plain-language summary. ${explanation.explanation}',
-    child: WorkspacePanel(
-      padding: const EdgeInsets.all(18),
+    child: Container(
+      padding: const EdgeInsets.fromLTRB(16, 4, 0, 4),
+      decoration: const BoxDecoration(
+        border: Border(left: BorderSide(color: AppColors.border, width: 2)),
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
@@ -863,7 +881,7 @@ class _ActionPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final bool safe = assessment.level == RiskLevel.safe;
-    return Card(
+    return WorkspacePanel(
       child: Padding(
         padding: const EdgeInsets.all(20),
         child: Column(
@@ -919,7 +937,10 @@ class _ActionPanel extends StatelessWidget {
               FilledButton.icon(
                 key: const Key('stop_here_button'),
                 style: assessment.level == RiskLevel.highRisk
-                    ? FilledButton.styleFrom(backgroundColor: AppColors.danger)
+                    ? FilledButton.styleFrom(
+                        backgroundColor: AppColors.danger,
+                        foregroundColor: Colors.white,
+                      )
                     : null,
                 onPressed: onStop,
                 icon: const Icon(Icons.stop_circle_outlined),

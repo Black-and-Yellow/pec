@@ -39,11 +39,13 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
 
   @override
   Widget build(BuildContext context) => Scaffold(
+    backgroundColor: AppColors.chrome,
     body: PageBody(
       maxWidth: 1060,
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 36),
       child: LayoutBuilder(
         builder: (BuildContext context, BoxConstraints constraints) {
-          final bool wide = constraints.maxWidth >= 780;
+          final bool wide = constraints.maxWidth >= 720;
           final Widget introduction = const _WelcomeIntroduction();
           final Widget actions = _WelcomeActions(
             services: widget.services,
@@ -55,7 +57,7 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
                     crossAxisAlignment: CrossAxisAlignment.center,
                     children: <Widget>[
                       Expanded(flex: 6, child: introduction),
-                      const SizedBox(width: 72),
+                      const SizedBox(width: 80),
                       Expanded(flex: 5, child: actions),
                     ],
                   )
@@ -64,7 +66,7 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: <Widget>[
                       introduction,
-                      const SizedBox(height: 36),
+                      const SizedBox(height: 32),
                       actions,
                     ],
                   ),
@@ -83,17 +85,27 @@ class _WelcomeIntroduction extends StatelessWidget {
     crossAxisAlignment: CrossAxisAlignment.start,
     mainAxisSize: MainAxisSize.min,
     children: <Widget>[
-      const FinGuardBrand(),
-      const SizedBox(height: 34),
+      const FinGuardBrand(inverse: true),
+      const SizedBox(height: 52),
+      Text(
+        'SAFER UPI STARTS HERE',
+        style: Theme.of(context).textTheme.labelLarge?.copyWith(
+          color: AppColors.teal,
+          letterSpacing: 1.4,
+        ),
+      ),
+      const SizedBox(height: 14),
       Text(
         'Check before you pay.',
-        style: Theme.of(context).textTheme.displaySmall,
+        style: Theme.of(
+          context,
+        ).textTheme.displaySmall?.copyWith(color: Colors.white),
       ),
       const SizedBox(height: 18),
       Text(
         'FinGuard explains warning signals in a UPI request before handing it to your payment app. You stay in control of every action.',
         style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-          color: AppColors.inkMuted,
+          color: AppColors.chromeMuted,
           height: 1.55,
         ),
       ),
@@ -124,9 +136,9 @@ class _TrustPoint extends StatelessWidget {
   Widget build(BuildContext context) => Row(
     mainAxisSize: MainAxisSize.min,
     children: <Widget>[
-      Icon(icon, size: 19, color: AppColors.tealDark),
+      Icon(icon, size: 19, color: AppColors.teal),
       const SizedBox(width: 7),
-      Text(label),
+      Text(label, style: const TextStyle(color: Colors.white)),
     ],
   );
 }
@@ -138,9 +150,13 @@ class _WelcomeActions extends StatelessWidget {
   final AuthController auth;
 
   @override
-  Widget build(BuildContext context) => Card(
+  Widget build(BuildContext context) => Container(
+    decoration: BoxDecoration(
+      color: AppColors.teal,
+      borderRadius: BorderRadius.circular(28),
+    ),
     child: Padding(
-      padding: const EdgeInsets.all(26),
+      padding: const EdgeInsets.all(28),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         mainAxisSize: MainAxisSize.min,
@@ -168,6 +184,10 @@ class _WelcomeActions extends StatelessWidget {
           const SizedBox(height: 22),
           FilledButton(
             key: const Key('create_account_button'),
+            style: FilledButton.styleFrom(
+              backgroundColor: AppColors.chrome,
+              foregroundColor: Colors.white,
+            ),
             onPressed: auth.busy
                 ? null
                 : () => _openForm(context, AuthFormMode.register),
@@ -176,6 +196,10 @@ class _WelcomeActions extends StatelessWidget {
           const SizedBox(height: 10),
           OutlinedButton(
             key: const Key('sign_in_button'),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: AppColors.ink,
+              side: const BorderSide(color: AppColors.ink, width: 1.5),
+            ),
             onPressed: auth.busy
                 ? null
                 : () => _openForm(context, AuthFormMode.login),
@@ -208,6 +232,7 @@ class _WelcomeActions extends StatelessWidget {
           const SizedBox(height: 10),
           TextButton(
             key: const Key('continue_guest_button'),
+            style: TextButton.styleFrom(foregroundColor: AppColors.ink),
             onPressed: auth.busy ? null : auth.continueAsGuest,
             child: const Text('Continue privately without an account'),
           ),

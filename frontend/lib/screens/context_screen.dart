@@ -51,10 +51,19 @@ class _ContextScreenState extends State<ContextScreen> {
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(title: const Text('Check suspicious message')),
     body: PageBody(
-      maxWidth: 760,
+      maxWidth: 820,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
+          Text(
+            'MESSAGE CHECK  /  OPTIONAL',
+            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+              color: AppColors.tealDark,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 1.1,
+            ),
+          ),
+          const SizedBox(height: 8),
           Text(
             'Look for scam context',
             style: Theme.of(context).textTheme.headlineMedium,
@@ -67,6 +76,15 @@ class _ContextScreenState extends State<ContextScreen> {
             ).textTheme.bodyLarge?.copyWith(color: AppColors.inkMuted),
           ),
           const SizedBox(height: 24),
+          Text(
+            'MESSAGE OR SCREENSHOT',
+            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+              color: AppColors.inkMuted,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 1,
+            ),
+          ),
+          const SizedBox(height: 8),
           TextField(
             key: const Key('suspicious_message_field'),
             controller: _controller,
@@ -98,7 +116,7 @@ class _ContextScreenState extends State<ContextScreen> {
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
                 color: AppColors.surfaceMuted,
-                borderRadius: BorderRadius.circular(10),
+                borderRadius: BorderRadius.circular(6),
                 border: Border.all(color: AppColors.border),
               ),
               child: Row(
@@ -121,7 +139,16 @@ class _ContextScreenState extends State<ContextScreen> {
               ),
             ),
           ],
-          const SizedBox(height: 12),
+          const Divider(height: 32),
+          Text(
+            'ANALYSIS OPTIONS',
+            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+              color: AppColors.inkMuted,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 1,
+            ),
+          ),
+          const SizedBox(height: 10),
           const PrivacyNote(
             text:
                 'Your selected text or image goes to the FinGuard server only when you press Analyze message. The app does not save screenshots. Gemini receives the input only if you opt in below.',
@@ -325,8 +352,18 @@ class _AnalysisResult extends StatelessWidget {
       label: hasValidatedContext
           ? 'Message analysis complete'
           : 'Message analysis unavailable',
-      child: WorkspacePanel(
+      child: Container(
+        width: double.infinity,
         padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: hasValidatedContext
+              ? AppColors.tealSoft
+              : AppColors.surfaceMuted,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(
+            color: hasValidatedContext ? AppColors.teal : AppColors.border,
+          ),
+        ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[

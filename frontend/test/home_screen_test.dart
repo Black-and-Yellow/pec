@@ -46,10 +46,12 @@ void main() {
       Theme.of(tester.element(find.byType(AppBar))).appBarTheme.backgroundColor,
       AppColors.chrome,
     );
-    expect(find.text('Reliable demo cases'), findsOneWidget);
+    expect(find.text('Try with demo data'), findsOneWidget);
     expect(find.byKey(const Key('open_risk_lab_button')), findsOneWidget);
     expect(find.text('Start 90-second demo'), findsOneWidget);
     expect(find.textContaining('does not intercept'), findsOneWidget);
+    expect(AppColors.teal, const Color(0xFF9BD617));
+    expect(AppColors.chrome, const Color(0xFF101A15));
   });
 
   testWidgets(

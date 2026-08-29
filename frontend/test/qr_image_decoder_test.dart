@@ -14,6 +14,18 @@ void main() {
       expect(QrImageDecoder.decode(_qrPng(value)), value);
     });
 
+    test('decodes a tightly cropped QR with a center brand mark', () {
+      const value =
+          'test-only-branded-qr-content-without-payment-data-0123456789';
+
+      expect(
+        QrImageDecoder.decode(
+          _qrPng(value, quietZone: 1, addCenterBrand: true),
+        ),
+        value,
+      );
+    });
+
     test(
       'rejects an oversized PNG from header metadata before pixel decode',
       () {
@@ -62,10 +74,16 @@ void main() {
   });
 }
 
-Uint8List _qrPng(String value) {
-  final matrix = Encoder.encode(value, ErrorCorrectionLevel.m).matrix!;
+Uint8List _qrPng(
+  String value, {
+  int quietZone = 4,
+  bool addCenterBrand = false,
+}) {
+  final matrix = Encoder.encode(
+    value,
+    addCenterBrand ? ErrorCorrectionLevel.h : ErrorCorrectionLevel.m,
+  ).matrix!;
   const scale = 6;
-  const quietZone = 4;
   final dimension = (matrix.width + (quietZone * 2)) * scale;
   final qrImage = image.Image(width: dimension, height: dimension);
 
@@ -87,6 +105,37 @@ Uint8List _qrPng(String value) {
         }
       }
     }
+  }
+
+  if (addCenterBrand) {
+    final int brandSide = (dimension * 20) ~/ 100;
+    final int left = (dimension - brandSide) ~/ 2;
+    final int top = (dimension - brandSide) ~/ 2;
+    image.fillRect(
+      qrImage,
+      x1: left,
+      y1: top,
+      x2: left + brandSide - 1,
+      y2: top + brandSide - 1,
+      color: image.ColorRgb8(255, 255, 255),
+    );
+    final int stripe = brandSide ~/ 5;
+    image.fillRect(
+      qrImage,
+      x1: left + stripe,
+      y1: top + stripe,
+      x2: left + (stripe * 2),
+      y2: top + brandSide - stripe,
+      color: image.ColorRgb8(245, 111, 35),
+    );
+    image.fillRect(
+      qrImage,
+      x1: left + (stripe * 3),
+      y1: top + stripe,
+      x2: left + (stripe * 4),
+      y2: top + brandSide - stripe,
+      color: image.ColorRgb8(0, 150, 95),
+    );
   }
 
   return image.encodePng(qrImage);

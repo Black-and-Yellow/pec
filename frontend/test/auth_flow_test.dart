@@ -325,6 +325,14 @@ void main() {
     await tester.tap(find.byKey(const Key('delete_account_button')));
     await tester.pumpAndSettle();
 
+    final FilledButton deleteButton = tester.widget<FilledButton>(
+      find.byKey(const Key('confirm_delete_account_button')),
+    );
+    expect(
+      deleteButton.style?.foregroundColor?.resolve(<WidgetState>{}),
+      Colors.white,
+    );
+
     await tester.enterText(
       find.byKey(const Key('delete_confirmation_field')),
       'DELETE?',
