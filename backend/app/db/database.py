@@ -31,6 +31,14 @@ class Database:
         cursor = dbapi_connection.cursor()
         cursor.execute("PRAGMA foreign_keys=ON")
         cursor.execute("PRAGMA busy_timeout=5000")
+        # A room full of phones checking the same QR is many concurrent
+        # readers against one writer, which is exactly the case the rollback
+        # journal handles worst: every reader blocks for the duration of each
+        # write. WAL lets them read while a write is in flight. Harmless for a
+        # single-user run and the difference between smooth and stuttering
+        # when several people scan at once.
+        cursor.execute("PRAGMA journal_mode=WAL")
+        cursor.execute("PRAGMA synchronous=NORMAL")
         cursor.close()
 
     def create_schema(self) -> None:

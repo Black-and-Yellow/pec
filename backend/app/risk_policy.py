@@ -11,6 +11,9 @@ class RiskWeights:
     incoming_call_ringing: int = 6
     call_with_remote_access: int = 12
     payee_identity_impersonation: int = 20
+    payee_address_pretext: int = 16
+    payee_address_disposable: int = 8
+    payee_handle_unrecognized: int = 8
     payee_trust_low: int = 10
     mule_account_signature: int = 22
     payee_name_unverified_informational: int = 0

@@ -94,5 +94,89 @@
     "high_count": 25,
     "reported_count": 6,
     "recent_new_device_count": 24
+  },
+  {
+    "vpa": "rahul.sharma91@ybl",
+    "first_seen_days_ago": 9,
+    "last_seen_days_ago": 0,
+    "check_count": 71,
+    "distinct_device_count": 64,
+    "safe_count": 3,
+    "caution_count": 12,
+    "high_count": 56,
+    "reported_count": 0,
+    "recent_new_device_count": 64
+  },
+  {
+    "vpa": "quick.loans@okaxis",
+    "first_seen_days_ago": 300,
+    "last_seen_days_ago": 1,
+    "check_count": 240,
+    "distinct_device_count": 96,
+    "safe_count": 180,
+    "caution_count": 45,
+    "high_count": 15,
+    "reported_count": 11,
+    "recent_new_device_count": 8
+  },
+  {
+    "vpa": "new.bakery@okhdfcbank",
+    "first_seen_days_ago": 2,
+    "last_seen_days_ago": 0,
+    "check_count": 2,
+    "distinct_device_count": 2,
+    "safe_count": 2,
+    "caution_count": 0,
+    "high_count": 0,
+    "reported_count": 0,
+    "recent_new_device_count": 2
+  },
+  {
+    "vpa": "store12345@rzp",
+    "first_seen_days_ago": 420,
+    "last_seen_days_ago": 0,
+    "check_count": 890,
+    "distinct_device_count": 310,
+    "safe_count": 880,
+    "caution_count": 10,
+    "high_count": 0,
+    "reported_count": 0,
+    "recent_new_device_count": 12
+  },
+  {
+    "vpa": "ticket.window@okicici",
+    "first_seen_days_ago": 45,
+    "last_seen_days_ago": 1,
+    "check_count": 27,
+    "distinct_device_count": 19,
+    "safe_count": 24,
+    "caution_count": 3,
+    "high_count": 0,
+    "reported_count": 0,
+    "recent_new_device_count": 6
+  },
+  {
+    "vpa": "prize.claim2026@ybl",
+    "first_seen_days_ago": 8,
+    "last_seen_days_ago": 0,
+    "check_count": 41,
+    "distinct_device_count": 38,
+    "safe_count": 0,
+    "caution_count": 5,
+    "high_count": 35,
+    "reported_count": 7,
+    "recent_new_device_count": 38
+  },
+  {
+    "vpa": "9182736450@ybl",
+    "first_seen_days_ago": 16,
+    "last_seen_days_ago": 0,
+    "check_count": 22,
+    "distinct_device_count": 20,
+    "safe_count": 4,
+    "caution_count": 8,
+    "high_count": 9,
+    "reported_count": 2,
+    "recent_new_device_count": 17
   }
 ]

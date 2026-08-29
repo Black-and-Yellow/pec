@@ -23,7 +23,7 @@ from app.schemas import (
     TrustGrade,
 )
 from app.services import mule_signature
-from app.services.vpa_identity import borrowed_brand_in_claimed_name
+from app.services.vpa_identity import analyze_vpa, borrowed_brand_in_claimed_name
 
 REMOTE_ACCESS_TOOL_LABELS: dict[RemoteAccessTool, str] = {
     RemoteAccessTool.ANYDESK: "AnyDesk",
@@ -168,6 +168,14 @@ class RiskEngine:
         trust = inputs.payee_trust
         if trust is not None:
             signals.extend(self._trust_signals(trust, seeded_match=inputs.indicator is not None))
+
+        # What the address itself discloses, scored whether or not the network
+        # has ever seen it. The trust grade cannot carry this on a thin file:
+        # with no ledger the score normalises over identity alone, so a pretext
+        # address reads as a high percentage and grades well. Without these
+        # signals 'kyc-verify-now@ybl' scored exactly the same as a legitimate
+        # tailor nobody had checked either.
+        signals.extend(self._address_signals(payment.vpa))
 
         if inputs.indicator is not None:
             signals.append(
@@ -414,6 +422,46 @@ class RiskEngine:
 
     def _has_relationship_evidence(self, indicator: FraudIndicator) -> bool:
         return indicator.report_count > 1 or self._relationship_count(indicator) > 0
+
+    def _address_signals(self, vpa: str) -> list[RiskSignal]:
+        """Score the structural concerns the address raises about itself.
+
+        Impersonation is not repeated here: a borrowed brand or a lookalike
+        handle already reaches the score through PAYEE_IDENTITY_IMPERSONATION,
+        and charging twice for one fact would make the breakdown unreadable.
+        """
+        identity = analyze_vpa(vpa)
+        concerns = {finding.code: finding for finding in identity.findings if finding.points == 0}
+        definitions = (
+            (
+                "PRETEXT_IN_ADDRESS",
+                "PAYEE_ADDRESS_PRETEXT",
+                "The address names a reason to pay rather than a payee",
+                self._weights.payee_address_pretext,
+            ),
+            (
+                "PHONE_DERIVED_ADDRESS",
+                "PAYEE_ADDRESS_DISPOSABLE",
+                "The address is a phone number rather than a name",
+                self._weights.payee_address_disposable,
+            ),
+            (
+                "UNRECOGNIZED_HANDLE",
+                "PAYEE_HANDLE_UNRECOGNIZED",
+                "No known payment provider issues this handle",
+                self._weights.payee_handle_unrecognized,
+            ),
+        )
+        return [
+            RiskSignal(
+                code=code,
+                label=label,
+                weight=weight,
+                evidence=concerns[finding_code].evidence[:300],
+            )
+            for finding_code, code, label, weight in definitions
+            if finding_code in concerns
+        ]
 
     def _trust_signals(self, trust: PayeeTrust, *, seeded_match: bool) -> list[RiskSignal]:
         """Turn the payee reputation report into scoring signals.

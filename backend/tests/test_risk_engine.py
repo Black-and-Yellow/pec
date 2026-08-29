@@ -108,7 +108,7 @@ def test_missing_amount_with_seeded_match_escalates() -> None:
         signal for signal in result.signals if signal.code == "AMOUNT_NOT_SPECIFIED"
     )
     assert amount_signal.weight == 20
-    assert result.score == 76
+    assert result.score == 92
     assert result.level is RiskLevel.HIGH
 
 
@@ -150,7 +150,7 @@ def test_seeded_scam_transaction() -> None:
             context=context,
         )
     )
-    assert result.score == 99
+    assert result.score == 100
     assert result.level is RiskLevel.HIGH
     assert "SEEDED_FRAUD_MATCH" in {signal.code for signal in result.signals}
 
@@ -255,7 +255,7 @@ def test_seeded_scam_remains_high_risk_without_ai_context() -> None:
             context=None,
         )
     )
-    assert result.score == 81
+    assert result.score == 97
     assert result.level is RiskLevel.HIGH
 
 

@@ -58,6 +58,19 @@ MINIMUM_DAYS_FOR_TENURE = 7
 # the strength of tenure and reach. A long-lived scam VPA is still a scam VPA.
 IMPERSONATION_SCORE_CEILING = 24
 
+# Identity points below this mean the address itself raised at least one
+# structural concern: a pretext word, a disposable phone-derived local part, or
+# a handle no known PSP issues. A clean address scores 28 or better.
+#
+# This threshold decides whether a thin file still withholds its number. The
+# withholding rule exists because identity alone can score 93 on a shop nobody
+# has ever paid, and that number would be read as an endorsement. That protects
+# a *good* structure. Withholding a *low* score protects the scammer instead:
+# it hands 'kyc-verify-now@ybl' the same courteous NEW as a real new bakery.
+# So a thin file with a structural concern is graded on what its own text
+# discloses, which needs no ledger to be true.
+IDENTITY_CONCERN_THRESHOLD = 24
+
 DISCLAIMER = (
     "FinGuard network reputation, not an NPCI, bank, or credit bureau rating. "
     "It reflects what this network has observed about the address plus what the "
@@ -163,6 +176,12 @@ class TrustScorer:
             # A thin file reports its grade and its pillars but no number.
             # Identity alone can score 93 on a shop nobody has ever paid, and
             # that number would be read as a recommendation.
+            #
+            # Grading such a file on identity alone was tried and is wrong: the
+            # score normalises over assessable pillars, so a pretext address
+            # scoring 22 of 30 on structure alone reads as 73 and grades A. The
+            # concern belongs in the pillar evidence and in the risk engine,
+            # which is where it now lives - not in an inflated percentage.
             score=None if thin_file and not adverse else score,
             grade=grade,
             headline=self._headline(grade, identity, reputation),
