@@ -1,0 +1,77 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-permission android:name="android.permission.INTERNET" />
+
+    <!--
+        Read once, at the moment the user runs a safety check, to see whether a
+        call is in progress while they pay. Fraud of this size is talked
+        through live, so a payment made mid-call is materially riskier than the
+        same payment made alone.
+
+        FinGuard never registers a call listener, never runs in the background,
+        and never reads a number, a call log, or a subscriber identifier. The
+        feature is optional: without this permission the check falls back to the
+        audio mode, which needs no permission at all.
+    -->
+    <uses-permission android:name="android.permission.READ_PHONE_STATE" />
+
+    <uses-feature
+        android:name="android.hardware.camera"
+        android:required="false" />
+
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="upi" />
+        </intent>
+
+        <!--
+            Remote-access tooling checked before a payment handoff. Scammers
+            direct victims to install one of these so they can watch the screen
+            and read OTPs during a "verification" call. This is a fixed
+            allowlist so FinGuard never needs QUERY_ALL_PACKAGES, and it cannot
+            enumerate anything the user has installed beyond these entries.
+        -->
+        <package android:name="com.anydesk.anydeskandroid" />
+        <package android:name="com.teamviewer.quicksupport.market" />
+        <package android:name="com.teamviewer.quicksupport.addon.universal" />
+        <package android:name="com.teamviewer.host.market" />
+        <package android:name="com.teamviewer.teamviewer.market.mobile" />
+        <package android:name="com.carriez.flutter_hbb" />
+        <package android:name="com.sand.airdroid" />
+        <package android:name="com.sand.aircast" />
+    </queries>
+
+    <application
+        android:label="FinGuard"
+        android:name="${applicationName}"
+        android:icon="@drawable/app_icon"
+        android:allowBackup="false"
+        android:usesCleartextTraffic="false">
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:launchMode="singleTop"
+            android:taskAffinity=""
+            android:theme="@style/LaunchTheme"
+            android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
+            android:hardwareAccelerated="true"
+            android:windowSoftInputMode="adjustResize">
+            <meta-data
+                android:name="io.flutter.embedding.android.NormalTheme"
+                android:resource="@style/NormalTheme" />
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
+        </activity>
+        <meta-data
+            android:name="flutterEmbedding"
+            android:value="2" />
+    </application>
+</manifest>

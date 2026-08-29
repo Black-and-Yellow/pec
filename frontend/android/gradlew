@@ -1,0 +1,42 @@
+#!/usr/bin/env sh
+set -eu
+
+GRADLE_VERSION="8.14"
+GRADLE_SHA256="61ad310d3c7d3e5da131b76bbf22b5a4c0786e9d892dae8c1658d4b484de3caa"
+CACHE_ROOT="${GRADLE_USER_HOME:-$HOME/.gradle}/finguard-wrapper"
+GRADLE_HOME="$CACHE_ROOT/gradle-$GRADLE_VERSION"
+ARCHIVE="$CACHE_ROOT/gradle-$GRADLE_VERSION-bin.zip"
+
+if [ ! -x "$GRADLE_HOME/bin/gradle" ]; then
+  mkdir -p "$CACHE_ROOT"
+  if [ ! -f "$ARCHIVE" ]; then
+    if command -v curl >/dev/null 2>&1; then
+      curl --fail --location --silent --show-error \
+        "https://services.gradle.org/distributions/gradle-$GRADLE_VERSION-bin.zip" \
+        --output "$ARCHIVE"
+    elif command -v wget >/dev/null 2>&1; then
+      wget -q \
+        "https://services.gradle.org/distributions/gradle-$GRADLE_VERSION-bin.zip" \
+        -O "$ARCHIVE"
+    else
+      echo "Install Gradle $GRADLE_VERSION or provide curl/wget to bootstrap it." >&2
+      exit 1
+    fi
+  fi
+  if command -v sha256sum >/dev/null 2>&1; then
+    ACTUAL_SHA256="$(sha256sum "$ARCHIVE" | awk '{print $1}')"
+  elif command -v shasum >/dev/null 2>&1; then
+    ACTUAL_SHA256="$(shasum -a 256 "$ARCHIVE" | awk '{print $1}')"
+  else
+    echo "Install sha256sum or shasum to verify the Gradle distribution." >&2
+    exit 1
+  fi
+  if [ "$ACTUAL_SHA256" != "$GRADLE_SHA256" ]; then
+    rm -f -- "$ARCHIVE"
+    echo "Gradle $GRADLE_VERSION distribution checksum verification failed." >&2
+    exit 1
+  fi
+  unzip -q -o "$ARCHIVE" -d "$CACHE_ROOT"
+fi
+
+exec "$GRADLE_HOME/bin/gradle" "$@"

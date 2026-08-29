@@ -1,0 +1,4 @@
+interface:
+  display_name: "FinGuard Production"
+  short_description: "Harden and verify FinGuard safely"
+  default_prompt: "Use $finguard-production to harden and verify FinGuard against its production acceptance gates."
