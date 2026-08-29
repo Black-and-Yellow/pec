@@ -30,6 +30,20 @@ fail() {
   exit 1
 }
 
+require_amd64_host() {
+  local dpkg_architecture
+  local machine_architecture
+
+  command -v dpkg >/dev/null || fail "dpkg is not installed"
+  command -v uname >/dev/null || fail "uname is not installed"
+  dpkg_architecture="$(dpkg --print-architecture)" || \
+    fail "unable to determine the Debian host architecture"
+  machine_architecture="$(uname -m)" || \
+    fail "unable to determine the kernel host architecture"
+  [[ "${dpkg_architecture}" == "amd64" && "${machine_architecture}" == "x86_64" ]] || \
+    fail "unsupported host architecture; expected Ubuntu amd64/x86_64"
+}
+
 check_authoritative_main_response() {
   [[ $# -eq 2 ]] || return 1
   local expected_commit="$1"
@@ -107,6 +121,7 @@ elif [[ "${SUDO_USER:-}" == "${DEPLOY_USER}" ]]; then
 fi
 
 [[ ${EUID} -eq 0 ]] || fail "run this script with sudo"
+require_amd64_host
 if [[ "${RELEASE_MODE}" == "forward" ]]; then
   [[ "${SUDO_UID:-}" =~ ^[0-9]+$ ]] || fail "forward deployment has no valid sudo UID"
   [[ "${SUDO_UID}" == "$(id --user "${DEPLOY_USER}")" ]] || \
@@ -311,7 +326,7 @@ read -r release_sequence release_commit release_identity_extra <<<"${release_ide
 [[ -f "${STAGING_DIR}/web/index.html" ]] || fail "release has no Flutter web build"
 [[ -f "${STAGING_DIR}/deploy/systemd/finguard-api.service" ]] || fail "release has no systemd unit"
 [[ -d "${SIGNED_WHEELHOUSE_ROOT}" && ! -L "${SIGNED_WHEELHOUSE_ROOT}" ]] || \
-  fail "release has no regular ARM64 Python wheelhouse directory"
+  fail "release has no regular amd64 Python wheelhouse directory"
 [[ -f "${SIGNED_WHEELHOUSE_ROOT}/requirements.txt" && \
    ! -L "${SIGNED_WHEELHOUSE_ROOT}/requirements.txt" ]] || \
   fail "release wheelhouse has no regular requirements manifest"

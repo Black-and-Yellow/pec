@@ -183,7 +183,8 @@ def test_invalid_context_tokens_are_rejected_without_echo(
 
 
 def test_demo_context_token_binds_seeded_provenance(client: TestClient) -> None:
-    scenario = client.get("/api/v1/demo/scenarios").json()["scenarios"][2]
+    scenarios = client.get("/api/v1/demo/scenarios").json()["scenarios"]
+    scenario = next(item for item in scenarios if item["id"] == "fake-kyc")
 
     claims = jwt.decode(scenario["context_token"], options={"verify_signature": False})
 

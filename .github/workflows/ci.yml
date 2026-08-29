@@ -85,13 +85,18 @@ jobs:
       - name: Verify aggregate Android release tasks fail closed
         run: |
           set -Eeuo pipefail
-          if output="$(./android/gradlew -p android assemble --dry-run --offline 2>&1)"; then
+          if output="$(./android/gradlew -p android assemble --dry-run --no-daemon --console=plain 2>&1)"; then
+            printf '%s\n' "${output}" >&2
             echo 'Aggregate assemble unexpectedly bypassed release configuration checks.' >&2
             exit 1
           fi
-          grep -Fq 'Android release builds require --dart-define=API_BASE_URL=https://<host>[/base-path].' \
-            <<<"${output}"
-          ./android/gradlew -p android assembleDebug --dry-run --offline >/dev/null
+          if ! grep -Fq 'Android release builds require --dart-define=API_BASE_URL=https://<host>[/base-path].' \
+            <<<"${output}"; then
+            printf '%s\n' "${output}" >&2
+            echo 'Aggregate assemble did not fail at the required release configuration boundary.' >&2
+            exit 1
+          fi
+          ./android/gradlew -p android assembleDebug --dry-run --no-daemon --console=plain >/dev/null
 
       - name: Build Flutter web
         run: flutter build web --release
@@ -177,6 +182,9 @@ jobs:
       - name: Verify release anti-replay contract
         run: bash deploy/scripts/test-release-metadata.sh
 
+      - name: Verify amd64 release architecture contract
+        run: bash deploy/scripts/test-release-architecture.sh
+
       - name: Verify restricted SSH transport contract
         run: bash deploy/scripts/test-deploy-transport.sh
 
@@ -238,10 +246,10 @@ jobs:
           grep -Fq 'finguard-release.tgz.sig' .github/workflows/deploy.yml
           grep -Fq 'Release signing and SSH transport keys must be distinct' .github/workflows/deploy.yml
           grep -Fq '"${RUNNER_TEMP}/finguard_release_signing_key"' .github/workflows/deploy.yml
-          grep -Fq 'Build and prove complete ARM64 Python wheelhouse' .github/workflows/deploy.yml
+          grep -Fq 'Build and prove complete amd64 Python wheelhouse' .github/workflows/deploy.yml
           grep -Fq 'release/python-wheelhouse/requirements.txt' .github/workflows/deploy.yml
-          grep -Fq 'manylinux_2_${glibc_minor}_aarch64' .github/workflows/deploy.yml
-          grep -Fq 'manylinux2014_aarch64' .github/workflows/deploy.yml
+          grep -Fq 'manylinux_2_${glibc_minor}_x86_64' .github/workflows/deploy.yml
+          grep -Fq 'manylinux2014_x86_64' .github/workflows/deploy.yml
           grep -Fq -- '--only-binary=:all:' .github/workflows/deploy.yml
           grep -Fq -- '--no-index' .github/workflows/deploy.yml
           grep -Fq 'sha256sum --check --strict SHA256SUMS' .github/workflows/deploy.yml

@@ -136,6 +136,11 @@ void main() {
     await tester.tap(find.byTooltip('Guest account and privacy'));
     await tester.pumpAndSettle();
     expect(find.text('Private guest mode'), findsOneWidget);
+    await tester.scrollUntilVisible(
+      find.byKey(const Key('leave_guest_button')),
+      220,
+      scrollable: find.byType(Scrollable).first,
+    );
     await tester.tap(find.byKey(const Key('leave_guest_button')));
     await tester.pumpAndSettle();
     expect(find.byType(WelcomeScreen), findsOneWidget);
@@ -275,6 +280,11 @@ void main() {
 
     await tester.tap(find.byTooltip('Account and privacy'));
     await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(
+      find.byKey(const Key('delete_account_button')),
+      220,
+      scrollable: find.byType(Scrollable).first,
+    );
     await tester.tap(find.byKey(const Key('delete_account_button')));
     await tester.pumpAndSettle();
     await tester.enterText(
@@ -307,6 +317,11 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.byTooltip('Account and privacy'));
     await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(
+      find.byKey(const Key('delete_account_button')),
+      220,
+      scrollable: find.byType(Scrollable).first,
+    );
     await tester.tap(find.byKey(const Key('delete_account_button')));
     await tester.pumpAndSettle();
 

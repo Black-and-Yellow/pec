@@ -16,12 +16,14 @@ class PasteScreen extends StatefulWidget {
     super.key,
     this.initialUri,
     this.contextAnalysis,
+    this.consentToExternalAi = false,
     this.analyzeImmediately = false,
   });
 
   final AppServices services;
   final String? initialUri;
   final ContextAnalysis? contextAnalysis;
+  final bool consentToExternalAi;
   final bool analyzeImmediately;
 
   @override
@@ -196,6 +198,7 @@ class _PasteScreenState extends State<PasteScreen> {
             assessment: assessment,
             paymentHandoffEnabled: scoreResult.paymentHandoffEnabled,
             contextAnalysis: validatedContext,
+            consentToExternalAi: widget.consentToExternalAi,
           ),
         ),
       );

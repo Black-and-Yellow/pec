@@ -9,6 +9,13 @@ type Diagnostics = {
   requestFailures: string[];
 };
 
+const benignChromiumDriverWarning =
+  /^\[warning\] \[\.WebGL-0x[0-9a-f]+\]GL Driver Message \(OpenGL, Performance, GL_CLOSE_PATH_NV, High\): GPU stall due to ReadPixels(?: \(this message will no longer repeat\))?$/;
+
+function isBenignChromiumDriverWarning(message: string): boolean {
+  return benignChromiumDriverWarning.test(message);
+}
+
 function observe(page: Page): Diagnostics {
   const diagnostics: Diagnostics = { console: [], pageErrors: [], requestFailures: [] };
   page.on('console', (message) => {
@@ -54,9 +61,11 @@ function expectClean(
   diagnostics: Diagnostics,
   options: { allowConsole?: RegExp; allowRequestFailures?: RegExp } = {},
 ): void {
-  const unexpectedConsole = options.allowConsole
-    ? diagnostics.console.filter((message) => !options.allowConsole!.test(message))
-    : diagnostics.console;
+  const unexpectedConsole = diagnostics.console.filter(
+    (message) =>
+      !isBenignChromiumDriverWarning(message) &&
+      !(options.allowConsole?.test(message) ?? false),
+  );
   const unexpectedFailures = options.allowRequestFailures
     ? diagnostics.requestFailures.filter(
         (failure) => !options.allowRequestFailures!.test(failure),
@@ -66,6 +75,20 @@ function expectClean(
   expect(diagnostics.pageErrors).toEqual([]);
   expect(unexpectedFailures).toEqual([]);
 }
+
+test('browser diagnostics ignore only the known Chromium ReadPixels driver warning', () => {
+  const exactWarning =
+    '[warning] [.WebGL-0x36340016ae00]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels';
+
+  expect(isBenignChromiumDriverWarning(exactWarning)).toBe(true);
+  expect(
+    isBenignChromiumDriverWarning(`${exactWarning} (this message will no longer repeat)`),
+  ).toBe(true);
+  expect(isBenignChromiumDriverWarning(exactWarning.replace('[warning]', '[error]'))).toBe(false);
+  expect(isBenignChromiumDriverWarning(exactWarning.replace('ReadPixels', 'app warning'))).toBe(
+    false,
+  );
+});
 
 const riskCases = [
   {
@@ -122,8 +145,13 @@ for (const riskCase of riskCases) {
       await page.getByRole('checkbox', {
         name: /I ignored urgency and contact instructions/,
       }).check();
-      await expect(page.getByText('Verification complete')).toBeVisible();
-      await expect(handoff).toBeEnabled();
+      if (riskCase.level === 'HIGH RISK') {
+        await expect(page.getByText(/this pause is deliberate/i)).toBeVisible();
+        await expect(handoff).toBeDisabled();
+        await expect(handoff).toBeEnabled({ timeout: 15_000 });
+      } else {
+        await expect(handoff).toBeEnabled();
+      }
     }
     await handoff.click();
     await expect(page.getByText(riskCase.confirmation)).toBeVisible();
@@ -139,16 +167,27 @@ test('guided offline Risk Lab compares outcomes responsively and stays view-only
   await page.getByRole('button', { name: 'Start 90-second demo' }).click();
   await expect(page.getByText('Compare policy evidence')).toBeVisible();
   await expect(page.getByText(/never call the API, AI or a UPI app/i)).toBeVisible();
-  await expect(page.getByText('Case 1 of 3')).toBeVisible();
+  await expect(page.getByText('Case 1 of 4')).toBeVisible();
   await expect(page.getByRole('button', { name: 'Previous' })).toBeDisabled();
 
   const next = page.getByRole('button', { name: 'Next' });
   await next.click();
-  await expect(page.getByText('Case 2 of 3')).toBeVisible();
+  await expect(page.getByText('Case 2 of 4')).toBeVisible();
+  const teaStallEvidence = page.getByRole('group', {
+    name: /Tea-stall sticker QR selected.*Payment amount is not specified/,
+  });
+  await teaStallEvidence.scrollIntoViewIfNeeded();
+  await expect(teaStallEvidence).toBeVisible();
   await next.click();
-  await expect(page.getByText('Case 3 of 3')).toBeVisible();
+  await expect(page.getByText('Case 3 of 4')).toBeVisible();
+  await next.click();
+  await expect(page.getByText('Case 4 of 4')).toBeVisible();
   await expect(next).toBeDisabled();
-  await expect(page.getByText('Recipient matches a seeded scam indicator')).toBeVisible();
+  const seededMatch = page.getByRole('group', {
+    name: /Fake KYC request selected.*Recipient matches a seeded scam indicator/,
+  });
+  await seededMatch.scrollIntoViewIfNeeded();
+  await expect(seededMatch).toBeVisible();
   await page.screenshot({
     path: path.join(visualQaRoot, 'risk-lab-1440.png'),
     fullPage: true,
@@ -276,7 +315,11 @@ test('offline request failure is contained without opening a UPI app', async ({ 
     'upi://pay?pa=offline.demo%40upi&pn=Offline%20Demo&am=10&cu=INR',
   );
   await page.getByRole('button', { name: 'Analyze payment' }).click();
-  await expect(page.getByText(/cannot reach the safety service/i)).toBeVisible();
+  await expect(
+    page.getByRole('group', {
+      name: /cannot reach the safety service.*UPI app was not opened/i,
+    }),
+  ).toBeVisible();
   await expect(page.getByRole('button', { name: 'Use reliable demo' })).toBeVisible();
   expectClean(diagnostics, {
     allowConsole: /net::ERR_INTERNET_DISCONNECTED/,

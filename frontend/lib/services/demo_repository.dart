@@ -27,6 +27,39 @@ final class DemoRepository {
       ),
     ),
     DemoScenario(
+      id: 'tea-stall',
+      title: 'Tea-stall sticker QR',
+      subtitle: 'Static merchant QR · amount entered later',
+      payment: Payment(
+        upiUri: 'upi://pay?pa=chai.point%40okicici&pn=Chai%20Point&cu=INR',
+        payeeVpa: 'chai.point@okicici',
+        payeeName: 'Chai Point',
+        currency: 'INR',
+      ),
+      assessment: RiskAssessment(
+        score: 23,
+        level: RiskLevel.safe,
+        signals: <RiskSignal>[
+          RiskSignal(
+            code: 'FIRST_TIME_PAYEE',
+            label: 'This is a first-time recipient on this device',
+            weight: 18,
+            evidence:
+                'No completed payment to this VPA exists in this device\'s local history',
+          ),
+          RiskSignal(
+            code: 'AMOUNT_NOT_SPECIFIED',
+            label: 'Payment amount is not specified',
+            weight: 5,
+            evidence:
+                'The amount will be entered in your UPI app. This is normal for a static merchant QR, so FinGuard weights it lightly on its own.',
+          ),
+        ],
+        recommendedAction:
+            'Verify the recipient details, then continue in your usual UPI app if they are correct.',
+      ),
+    ),
+    DemoScenario(
       id: 'marketplace-seller',
       title: 'Marketplace seller',
       subtitle: 'First-time recipient · ₹4,500',

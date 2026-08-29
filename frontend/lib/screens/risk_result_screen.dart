@@ -1,8 +1,12 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../models/context_analysis.dart';
 import '../models/payment.dart';
 import '../models/risk.dart';
+import '../models/risk_explanation.dart';
+import '../models/trusted_contact.dart';
 import '../services/api_service.dart';
 import '../services/app_services.dart';
 import '../services/report_builder.dart';
@@ -18,6 +22,7 @@ class RiskResultScreen extends StatefulWidget {
     required this.paymentHandoffEnabled,
     super.key,
     this.contextAnalysis,
+    this.consentToExternalAi = false,
     this.isDemo = false,
   });
 
@@ -26,6 +31,7 @@ class RiskResultScreen extends StatefulWidget {
   final RiskAssessment assessment;
   final bool paymentHandoffEnabled;
   final ContextAnalysis? contextAnalysis;
+  final bool consentToExternalAi;
   final bool isDemo;
 
   @override
@@ -33,9 +39,33 @@ class RiskResultScreen extends StatefulWidget {
 }
 
 class _RiskResultScreenState extends State<RiskResultScreen> {
+  static const int _coolOffSeconds = 10;
+
   bool _preparingReport = false;
   final Set<_VerificationCheck> _completedVerifications =
       <_VerificationCheck>{};
+  Timer? _coolOffTimer;
+  int _coolOffRemaining = _coolOffSeconds;
+  TrustedContact? _trustedContact;
+  late RiskExplanation _explanation;
+  RiskExplanation? _aiWording;
+
+  @override
+  void initState() {
+    super.initState();
+    _explanation = RiskExplanation(
+      available: true,
+      source: RiskExplanationSource.template,
+      status: 'generated',
+      explanation: ReportBuilder.plainLanguageExplanation(widget.assessment),
+    );
+    if (!widget.isDemo) {
+      unawaited(_loadTrustedContact());
+      if (widget.assessment.assessmentId != null) {
+        unawaited(_loadExplanation());
+      }
+    }
+  }
 
   bool get _requiresIndependentVerification =>
       widget.paymentHandoffEnabled && widget.assessment.level != RiskLevel.safe;
@@ -44,6 +74,18 @@ class _RiskResultScreenState extends State<RiskResultScreen> {
       !_requiresIndependentVerification ||
       _completedVerifications.length == _VerificationCheck.values.length;
 
+  bool get _requiresCoolOff =>
+      widget.paymentHandoffEnabled &&
+      widget.assessment.level == RiskLevel.highRisk;
+
+  bool get _coolOffComplete => !_requiresCoolOff || _coolOffRemaining == 0;
+
+  @override
+  void dispose() {
+    _coolOffTimer?.cancel();
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
     final bool wide = MediaQuery.sizeOf(context).width >= 900;
@@ -51,6 +93,8 @@ class _RiskResultScreenState extends State<RiskResultScreen> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
         _ResultHeader(assessment: widget.assessment, isDemo: widget.isDemo),
+        const SizedBox(height: 18),
+        _ExplanationCard(explanation: _explanation, aiWording: _aiWording),
         const SizedBox(height: 26),
         _PaymentDetails(payment: widget.payment),
         const SizedBox(height: 28),
@@ -63,13 +107,17 @@ class _RiskResultScreenState extends State<RiskResultScreen> {
       isDemo: widget.isDemo,
       preparingReport: _preparingReport,
       completedVerifications: _completedVerifications,
-      canContinue: _independentVerificationComplete,
+      canContinue: _independentVerificationComplete && _coolOffComplete,
+      coolOffRemaining: _requiresCoolOff ? _coolOffRemaining : 0,
+      trustedContact: _trustedContact,
       onStop: _stopHere,
       onContinue: _continue,
       onVerificationChanged: _setVerification,
       onVerify: _showVerificationGuidance,
       onPrepareReport: () => _prepareReport(alreadyPaid: false),
       onShare: _shareTrustedContact,
+      onMessageTrustedContact: _messageTrustedContact,
+      onSaveTrustedContact: _saveTrustedContact,
       onAlreadyPaid: () => _prepareReport(alreadyPaid: true),
     );
 
@@ -108,17 +156,39 @@ class _RiskResultScreenState extends State<RiskResultScreen> {
     Navigator.of(context).popUntil((Route<Object?> route) => route.isFirst);
   }
 
+  Future<void> _loadExplanation() async {
+    final String? assessmentId = widget.assessment.assessmentId;
+    if (assessmentId == null) {
+      return;
+    }
+    try {
+      final RiskExplanation explanation = await widget.services.api
+          .explainAssessment(
+            assessmentId: assessmentId,
+            consent: widget.consentToExternalAi,
+          );
+      if (mounted && explanation.available && explanation.isAiAssisted) {
+        setState(() => _aiWording = explanation);
+      }
+    } on Object {
+      // The immediate local template remains the offline and failure fallback.
+    }
+  }
+
   Future<void> _continue() async {
     if (!widget.paymentHandoffEnabled) {
       return;
     }
     final RiskLevel level = widget.assessment.level;
-    if (level != RiskLevel.safe && !_independentVerificationComplete) {
+    if (level != RiskLevel.safe &&
+        (!_independentVerificationComplete || !_coolOffComplete)) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
+          SnackBar(
             content: Text(
-              'Complete the independent verification checklist first.',
+              !_independentVerificationComplete
+                  ? 'Complete the independent verification checklist first.'
+                  : 'Wait for the deliberate cooling-off pause to finish.',
             ),
           ),
         );
@@ -164,7 +234,29 @@ class _RiskResultScreenState extends State<RiskResultScreen> {
       } else {
         _completedVerifications.remove(check);
       }
+      if (_requiresCoolOff && !_independentVerificationComplete) {
+        _coolOffTimer?.cancel();
+        _coolOffTimer = null;
+        _coolOffRemaining = _coolOffSeconds;
+      }
     });
+    if (_requiresCoolOff &&
+        _independentVerificationComplete &&
+        _coolOffTimer == null) {
+      _coolOffTimer = Timer.periodic(const Duration(seconds: 1), (Timer timer) {
+        if (!mounted) {
+          timer.cancel();
+          return;
+        }
+        setState(() {
+          _coolOffRemaining--;
+          if (_coolOffRemaining <= 0) {
+            _coolOffRemaining = 0;
+            timer.cancel();
+          }
+        });
+      });
+    }
   }
 
   Future<void> _showVerificationGuidance() async {
@@ -204,6 +296,57 @@ class _RiskResultScreenState extends State<RiskResultScreen> {
       await widget.services.externalActions.shareTrustedContact(
         ReportBuilder.trustedContactMessage(widget.payment, widget.assessment),
         origin: origin,
+      );
+    } on Object catch (error) {
+      if (mounted) {
+        showActionError(context, error);
+      }
+    }
+  }
+
+  Future<void> _loadTrustedContact() async {
+    final TrustedContact? contact = await widget.services.store
+        .trustedContact();
+    if (!mounted) {
+      return;
+    }
+    setState(() => _trustedContact = contact);
+  }
+
+  Future<void> _saveTrustedContact() async {
+    final TrustedContact? contact = await showTrustedContactEditor(
+      context,
+      initial: _trustedContact,
+    );
+    if (contact == null || !mounted) {
+      return;
+    }
+    await widget.services.store.setTrustedContact(contact);
+    if (!mounted) {
+      return;
+    }
+    setState(() => _trustedContact = contact);
+  }
+
+  Future<void> _messageTrustedContact() async {
+    final TrustedContact? contact = _trustedContact;
+    if (contact == null) {
+      return;
+    }
+    final bool confirmed = await confirmAction(
+      context,
+      title: 'Message ${contact.name} on WhatsApp or SMS?',
+      message:
+          'FinGuard will try WhatsApp, then your SMS app, with a prepared message to ${contact.name}. You still have to press Send yourself. The number stays on this device and is never sent to FinGuard servers.',
+      confirmLabel: 'Open messaging app',
+    );
+    if (!confirmed || !mounted) {
+      return;
+    }
+    try {
+      await widget.services.externalActions.messageTrustedContact(
+        contact.phone,
+        ReportBuilder.trustedContactMessage(widget.payment, widget.assessment),
       );
     } on Object catch (error) {
       if (mounted) {
@@ -369,6 +512,100 @@ class _ResultHeader extends StatelessWidget {
   };
 }
 
+class _ExplanationCard extends StatelessWidget {
+  const _ExplanationCard({required this.explanation, required this.aiWording});
+
+  final RiskExplanation explanation;
+  final RiskExplanation? aiWording;
+
+  @override
+  Widget build(BuildContext context) => Semantics(
+    key: const Key('plain_language_summary'),
+    container: true,
+    liveRegion: true,
+    label: 'Plain-language summary. ${explanation.explanation}',
+    child: WorkspacePanel(
+      padding: const EdgeInsets.all(18),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Wrap(
+            spacing: 10,
+            runSpacing: 8,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: <Widget>[
+              Text(
+                'Plain-language summary',
+                style: Theme.of(context).textTheme.titleLarge,
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Text(
+            explanation.explanation,
+            key: const Key('plain_language_summary_text'),
+            style: Theme.of(context).textTheme.bodyLarge,
+          ),
+          const SizedBox(height: 10),
+          Text(
+            'Generated from the deterministic signals above. The score and verdict come from FinGuard\'s policy engine, not from AI.',
+            style: Theme.of(
+              context,
+            ).textTheme.bodySmall?.copyWith(color: AppColors.inkMuted),
+          ),
+          if (aiWording != null) ...<Widget>[
+            const SizedBox(height: 14),
+            const Divider(height: 1),
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 8,
+              runSpacing: 6,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: <Widget>[
+                Container(
+                  key: const Key('ai_assisted_wording_chip'),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 5,
+                  ),
+                  decoration: BoxDecoration(
+                    color: AppColors.tealSoft,
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                  child: Text(
+                    'AI-ASSISTED WORDING',
+                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                      color: AppColors.tealDark,
+                      letterSpacing: 0.6,
+                    ),
+                  ),
+                ),
+                Text(
+                  'Optional wording only',
+                  style: Theme.of(context).textTheme.labelMedium,
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text(
+              aiWording!.explanation,
+              key: const Key('ai_assisted_wording_text'),
+              style: Theme.of(context).textTheme.bodyMedium,
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'Do not use this AI wording instead of the deterministic score, evidence, and recommended action.',
+              style: Theme.of(
+                context,
+              ).textTheme.bodySmall?.copyWith(color: AppColors.inkMuted),
+            ),
+          ],
+        ],
+      ),
+    ),
+  );
+}
+
 class _PaymentDetails extends StatelessWidget {
   const _PaymentDetails({required this.payment});
 
@@ -521,12 +758,16 @@ class _ActionPanel extends StatelessWidget {
     required this.preparingReport,
     required this.completedVerifications,
     required this.canContinue,
+    required this.coolOffRemaining,
+    required this.trustedContact,
     required this.onStop,
     required this.onContinue,
     required this.onVerificationChanged,
     required this.onVerify,
     required this.onPrepareReport,
     required this.onShare,
+    required this.onMessageTrustedContact,
+    required this.onSaveTrustedContact,
     required this.onAlreadyPaid,
   });
 
@@ -536,6 +777,8 @@ class _ActionPanel extends StatelessWidget {
   final bool preparingReport;
   final Set<_VerificationCheck> completedVerifications;
   final bool canContinue;
+  final int coolOffRemaining;
+  final TrustedContact? trustedContact;
   final VoidCallback onStop;
   final VoidCallback onContinue;
   final void Function(_VerificationCheck check, bool selected)
@@ -543,6 +786,8 @@ class _ActionPanel extends StatelessWidget {
   final VoidCallback onVerify;
   final VoidCallback onPrepareReport;
   final VoidCallback onShare;
+  final VoidCallback onMessageTrustedContact;
+  final VoidCallback onSaveTrustedContact;
   final VoidCallback onAlreadyPaid;
 
   @override
@@ -623,6 +868,16 @@ class _ActionPanel extends StatelessWidget {
                   onChanged: onVerificationChanged,
                 ),
                 const SizedBox(height: 10),
+                if (coolOffRemaining > 0) ...<Widget>[
+                  Semantics(
+                    key: const Key('cool_off_notice'),
+                    liveRegion: true,
+                    child: const Text(
+                      'Take a moment. Scammers rely on speed — this pause is deliberate.',
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                ],
               ],
               if (assessment.level == RiskLevel.highRisk &&
                   !isDemo) ...<Widget>[
@@ -638,18 +893,41 @@ class _ActionPanel extends StatelessWidget {
                   label: const Text('Prepare report'),
                 ),
                 const SizedBox(height: 10),
-                OutlinedButton.icon(
-                  onPressed: onShare,
-                  icon: const Icon(Icons.ios_share_outlined),
-                  label: const Text('Alert trusted contact'),
-                ),
+                if (trustedContact
+                    case final TrustedContact contact) ...<Widget>[
+                  FilledButton.icon(
+                    key: const Key('message_trusted_contact_button'),
+                    onPressed: onMessageTrustedContact,
+                    icon: const Icon(Icons.chat_outlined),
+                    label: Text('Alert ${contact.name} on WhatsApp'),
+                  ),
+                  TextButton(
+                    onPressed: onShare,
+                    child: const Text('Use share sheet instead'),
+                  ),
+                ] else ...<Widget>[
+                  OutlinedButton.icon(
+                    onPressed: onShare,
+                    icon: const Icon(Icons.ios_share_outlined),
+                    label: const Text('Alert trusted contact'),
+                  ),
+                  TextButton(
+                    key: const Key('save_trusted_contact_button'),
+                    onPressed: onSaveTrustedContact,
+                    child: const Text('Save a trusted contact'),
+                  ),
+                ],
                 const SizedBox(height: 6),
               ],
               if (paymentHandoffEnabled)
                 TextButton(
                   key: const Key('continue_anyway_button'),
                   onPressed: canContinue ? onContinue : null,
-                  child: const Text('Continue anyway'),
+                  child: Text(
+                    coolOffRemaining > 0
+                        ? 'Continue anyway (${coolOffRemaining}s)'
+                        : 'Continue anyway',
+                  ),
                 ),
             ],
             if (!isDemo) ...<Widget>[

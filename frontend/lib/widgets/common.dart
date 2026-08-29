@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../models/risk.dart';
+import '../models/trusted_contact.dart';
 import '../theme/app_theme.dart';
 
 class PageBody extends StatelessWidget {
@@ -373,6 +374,95 @@ Future<bool> confirmAction(
     ),
   );
   return confirmed ?? false;
+}
+
+Future<TrustedContact?> showTrustedContactEditor(
+  BuildContext context, {
+  TrustedContact? initial,
+}) async {
+  final TextEditingController nameController = TextEditingController(
+    text: initial?.name ?? '',
+  );
+  final TextEditingController phoneController = TextEditingController(
+    text: initial?.phone ?? '',
+  );
+  bool attempted = false;
+  final TrustedContact? result = await showDialog<TrustedContact>(
+    context: context,
+    builder: (BuildContext dialogContext) => StatefulBuilder(
+      builder: (BuildContext context, StateSetter setDialogState) {
+        final String name = nameController.text.trim();
+        final String? phone = TrustedContact.normalizePhone(
+          phoneController.text,
+        );
+        final bool nameValid = name.isNotEmpty && name.length <= 40;
+        return AlertDialog(
+          scrollable: true,
+          title: Text(
+            initial == null ? 'Save a trusted contact' : 'Edit trusted contact',
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              const Text(
+                'The name and phone number stay on this device and are never sent to FinGuard servers.',
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                key: const Key('trusted_contact_name_field'),
+                controller: nameController,
+                maxLength: 40,
+                onChanged: (_) => setDialogState(() {}),
+                decoration: InputDecoration(
+                  labelText: 'Name',
+                  errorText: attempted && !nameValid
+                      ? 'Enter a name between 1 and 40 characters.'
+                      : null,
+                ),
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                key: const Key('trusted_contact_phone_field'),
+                controller: phoneController,
+                keyboardType: TextInputType.phone,
+                onChanged: (_) => setDialogState(() {}),
+                decoration: InputDecoration(
+                  labelText: 'Phone number',
+                  hintText: '+91 98765 43210',
+                  errorText: attempted && phone == null
+                      ? 'Enter a valid phone number with country code.'
+                      : null,
+                ),
+              ),
+            ],
+          ),
+          actions: <Widget>[
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              key: const Key('save_trusted_contact_button'),
+              onPressed: () {
+                if (!nameValid || phone == null) {
+                  setDialogState(() => attempted = true);
+                  return;
+                }
+                Navigator.pop(
+                  dialogContext,
+                  TrustedContact(name: name, phone: phone),
+                );
+              },
+              child: const Text('Save contact'),
+            ),
+          ],
+        );
+      },
+    ),
+  );
+  nameController.dispose();
+  phoneController.dispose();
+  return result;
 }
 
 void showActionError(BuildContext context, Object error) {

@@ -74,7 +74,7 @@ jobs:
           flutter build web --release \
             --dart-define="GOOGLE_WEB_CLIENT_ID=${{ vars.GOOGLE_WEB_CLIENT_ID }}"
 
-      - name: Build and prove complete ARM64 Python wheelhouse
+      - name: Build and prove complete amd64 Python wheelhouse
         run: |
           set -Eeuo pipefail
           python -m pip install --disable-pip-version-check --upgrade pip==26.2.1
@@ -96,9 +96,9 @@ jobs:
               r"==[A-Za-z0-9][A-Za-z0-9._+-]*"
           )
           if len(requirements) != len(set(requirements)):
-              raise SystemExit("duplicate ARM64 wheelhouse requirement")
+              raise SystemExit("duplicate amd64 wheelhouse requirement")
           if not all(exact_requirement.fullmatch(requirement) for requirement in requirements):
-              raise SystemExit("ARM64 wheelhouse requirements must be exact pins")
+              raise SystemExit("amd64 wheelhouse requirements must be exact pins")
           Path("release/python-wheelhouse/requirements.txt").write_text(
               "\n".join(requirements) + "\n",
               encoding="utf-8",
@@ -108,9 +108,9 @@ jobs:
 
           platform_args=()
           for glibc_minor in {39..17}; do
-            platform_args+=(--platform "manylinux_2_${glibc_minor}_aarch64")
+            platform_args+=(--platform "manylinux_2_${glibc_minor}_x86_64")
           done
-          platform_args+=(--platform manylinux2014_aarch64)
+          platform_args+=(--platform manylinux2014_x86_64)
           target_args=(
             "${platform_args[@]}"
             --implementation cp
@@ -130,12 +130,12 @@ jobs:
 
           wheel_count="$(find release/python-wheelhouse -maxdepth 1 -type f -name '*.whl' | wc -l)"
           (( wheel_count >= 13 && wheel_count <= 128 )) || {
-            echo "ARM64 wheelhouse contains an invalid wheel count: ${wheel_count}" >&2
+            echo "amd64 wheelhouse contains an invalid wheel count: ${wheel_count}" >&2
             exit 1
           }
 
           # Resolve the same target entirely from the candidate wheelhouse. This
-          # reads wheel metadata but never imports or executes ARM64 wheel code.
+          # reads wheel metadata but never imports or executes target wheel code.
           proof_dir="$(mktemp -d "${RUNNER_TEMP}/finguard-wheelhouse-proof.XXXXXX")"
           trap 'rm -rf -- "${proof_dir}"' EXIT
           python -m pip download \
@@ -154,7 +154,7 @@ jobs:
           cmp --silent \
             "${RUNNER_TEMP}/finguard-wheelhouse-expected.txt" \
             "${RUNNER_TEMP}/finguard-wheelhouse-resolved.txt" || {
-              echo 'Offline ARM64 wheelhouse proof did not resolve the signed wheel set.' >&2
+              echo 'Offline amd64 wheelhouse proof did not resolve the signed wheel set.' >&2
               exit 1
             }
 

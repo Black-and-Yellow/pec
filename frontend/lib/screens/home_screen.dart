@@ -6,6 +6,7 @@ import '../models/history_entry.dart';
 import '../models/risk.dart';
 import '../services/app_services.dart';
 import '../services/demo_repository.dart';
+import '../services/share_intake.dart';
 import '../theme/app_theme.dart';
 import '../widgets/common.dart';
 import 'account_screen.dart';
@@ -27,6 +28,29 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   String? _loadingDemoId;
+  StreamSubscription<String>? _shareSubscription;
+  bool _shareRouteOpen = false;
+  bool _drainingSharedText = false;
+  final List<String> _pendingSharedText = <String>[];
+
+  @override
+  void initState() {
+    super.initState();
+    _shareSubscription = widget.services.shareIntake.shares().listen(
+      _handleSharedText,
+    );
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        unawaited(_openInitialShare());
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    unawaited(_shareSubscription?.cancel());
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) => Scaffold(
@@ -134,6 +158,88 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
     ),
   );
+
+  Future<void> _openInitialShare() async {
+    try {
+      final String? shared = await widget.services.shareIntake.initialShare();
+      if (shared != null) {
+        await _handleSharedText(shared);
+      }
+    } on Object {
+      // Share intake is optional and must not block the normal home flow.
+    }
+  }
+
+  Future<void> _handleSharedText(String rawText) async {
+    final String? shared = normalizeSharedText(rawText);
+    if (shared == null || !mounted) {
+      return;
+    }
+    if (_shareRouteOpen || ModalRoute.of(context)?.isCurrent != true) {
+      _queueSharedText(shared);
+      return;
+    }
+    _shareRouteOpen = true;
+    try {
+      final String? upiUri = _extractUpiUri(shared);
+      await Navigator.push<void>(
+        context,
+        MaterialPageRoute<void>(
+          builder: (BuildContext context) => upiUri == null
+              ? ContextScreen(services: widget.services, initialText: shared)
+              : PasteScreen(
+                  services: widget.services,
+                  initialUri: upiUri,
+                  analyzeImmediately: true,
+                ),
+        ),
+      );
+    } finally {
+      _shareRouteOpen = false;
+      unawaited(_drainSharedText());
+    }
+  }
+
+  void _queueSharedText(String shared) {
+    if (_pendingSharedText.length == 5) {
+      _pendingSharedText.removeAt(0);
+    }
+    _pendingSharedText.add(shared);
+    unawaited(_drainSharedText());
+  }
+
+  Future<void> _drainSharedText() async {
+    if (_drainingSharedText) {
+      return;
+    }
+    _drainingSharedText = true;
+    try {
+      while (mounted && _pendingSharedText.isNotEmpty) {
+        while (mounted &&
+            (_shareRouteOpen || ModalRoute.of(context)?.isCurrent != true)) {
+          await Future<void>.delayed(const Duration(milliseconds: 150));
+        }
+        if (!mounted) {
+          return;
+        }
+        final String next = _pendingSharedText.removeAt(0);
+        await _handleSharedText(next);
+      }
+    } finally {
+      _drainingSharedText = false;
+    }
+  }
+
+  String? _extractUpiUri(String text) {
+    final RegExpMatch? match = RegExp(
+      r'upi://pay[^\s]*',
+      caseSensitive: false,
+    ).firstMatch(text);
+    if (match == null) {
+      return null;
+    }
+    return match.group(0)?.replaceFirst(RegExp(r'''[.,\)\]>"']+$'''), '');
+  }
 
   void _openRiskLab() => unawaited(
     Navigator.push<void>(

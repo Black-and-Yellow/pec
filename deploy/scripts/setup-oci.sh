@@ -27,7 +27,22 @@ fail() {
   exit 1
 }
 
+require_amd64_host() {
+  local dpkg_architecture
+  local machine_architecture
+
+  command -v dpkg >/dev/null || fail "dpkg is not installed"
+  command -v uname >/dev/null || fail "uname is not installed"
+  dpkg_architecture="$(dpkg --print-architecture)" || \
+    fail "unable to determine the Debian host architecture"
+  machine_architecture="$(uname -m)" || \
+    fail "unable to determine the kernel host architecture"
+  [[ "${dpkg_architecture}" == "amd64" && "${machine_architecture}" == "x86_64" ]] || \
+    fail "unsupported host architecture; expected Ubuntu amd64/x86_64"
+}
+
 [[ ${EUID} -eq 0 ]] || fail "run this script with sudo"
+require_amd64_host
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 DEPLOY_DIR="$(cd -- "${SCRIPT_DIR}/.." && pwd)"
@@ -343,7 +358,7 @@ systemctl reload nginx
 systemctl enable finguard-api.service
 
 printf '\nOCI host setup is ready. Next:\n'
-printf '  Architecture detected: %s (arm64 is the intended OCI target).\n' "$(dpkg --print-architecture)"
+printf '  Architecture validated: amd64/x86_64.\n'
 printf '  1. Edit /etc/finguard/finguard.env.\n'
 printf '     Replace the AUTH_SECRET_KEY placeholder; production startup rejects it.\n'
 printf '  2. Install the dedicated finguard-ci Ed25519 public key in %s.\n' \

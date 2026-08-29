@@ -1,3 +1,5 @@
+import 'package:flutter/foundation.dart';
+
 import '../config/app_config.dart';
 import 'api_service.dart';
 import 'auth_api.dart';
@@ -6,6 +8,7 @@ import 'auth_store.dart';
 import 'demo_repository.dart';
 import 'external_actions.dart';
 import 'local_store.dart';
+import 'share_intake.dart';
 
 final class AppServices {
   const AppServices({
@@ -13,6 +16,7 @@ final class AppServices {
     required this.store,
     required this.externalActions,
     required this.demos,
+    this.shareIntake = const NoopShareIntake(),
     this.auth,
   });
 
@@ -20,6 +24,7 @@ final class AppServices {
   final LocalStore store;
   final ExternalActions externalActions;
   final DemoRepository demos;
+  final ShareIntake shareIntake;
   final AuthController? auth;
 
   factory AppServices.production() {
@@ -29,6 +34,9 @@ final class AppServices {
       store: PreferencesLocalStore(),
       externalActions: PlatformExternalActions(),
       demos: const DemoRepository(),
+      shareIntake: !kIsWeb && defaultTargetPlatform == TargetPlatform.android
+          ? PlatformShareIntake()
+          : const NoopShareIntake(),
       auth: AuthController(
         api: AuthApiService(baseUri: AppConfig.apiBaseUri),
         store: SecureAuthStore(),

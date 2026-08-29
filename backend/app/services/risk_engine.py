@@ -21,6 +21,19 @@ SUSPICIOUS_NOTE_PATTERN = re.compile(
     re.IGNORECASE,
 )
 
+CORROBORATING_SIGNAL_CODES = frozenset(
+    {
+        "SEEDED_FRAUD_MATCH",
+        "SUSPICIOUS_PAYMENT_NOTE",
+        "SEEDED_IDENTIFIER_RELATIONSHIP",
+        "CONTEXT_IMPERSONATION",
+        "CONTEXT_URGENCY",
+        "CONTEXT_KYC_THREAT",
+        "CONTEXT_REWARD_OR_REFUND",
+        "CONTEXT_SUSPICIOUS_SUPPORT",
+    }
+)
+
 
 @dataclass(frozen=True, slots=True)
 class RiskInputs:
@@ -70,18 +83,7 @@ class RiskEngine:
                 )
             )
 
-        if payment.amount is None:
-            signals.append(
-                RiskSignal(
-                    code="AMOUNT_NOT_SPECIFIED",
-                    label="Payment amount is not specified",
-                    weight=self._weights.amount_not_specified,
-                    evidence=(
-                        "The amount would be entered after handoff, so FinGuard could not "
-                        "evaluate it before opening a UPI app"
-                    ),
-                )
-            )
+        amount_signal_index = len(signals)
 
         unusual_threshold = self._unusual_amount_threshold(inputs.typical_amount)
         if (
@@ -133,6 +135,32 @@ class RiskEngine:
             and inputs.context.confidence >= self._thresholds.minimum_context_confidence
         ):
             signals.extend(self._context_signals(inputs.context))
+
+        if payment.amount is None:
+            corroborated = any(
+                signal.code in CORROBORATING_SIGNAL_CODES for signal in signals
+            )
+            weight = (
+                self._weights.amount_not_specified_corroborated
+                if corroborated
+                else self._weights.amount_not_specified
+            )
+            evidence = (
+                "The amount is unspecified and other warning signals already fired, so an "
+                "open-ended request is treated as higher risk."
+                if corroborated
+                else "The amount will be entered in your UPI app. This is normal for a static "
+                "merchant QR, so FinGuard weights it lightly on its own."
+            )
+            signals.insert(
+                amount_signal_index,
+                RiskSignal(
+                    code="AMOUNT_NOT_SPECIFIED",
+                    label="Payment amount is not specified",
+                    weight=weight,
+                    evidence=evidence,
+                ),
+            )
 
         score = max(0, min(100, sum(signal.weight for signal in signals)))
         level = self._level(score)

@@ -59,7 +59,7 @@ def test_live_uvicorn_health_parse_errors_and_all_risk_levels(live_api_url: str)
             assert score["level"] == scenario["expected_level"]
             observed_levels.append(score["level"])
 
-        assert observed_levels == ["SAFE", "CAUTION", "HIGH"]
+        assert observed_levels == ["SAFE", "SAFE", "CAUTION", "HIGH"]
 
         local_analysis = client.post(
             "/api/v1/context/analyze",

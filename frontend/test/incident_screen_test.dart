@@ -20,18 +20,73 @@ void main() {
 
   Future<void> pumpIncidentScreen(
     WidgetTester tester,
-    FakeExternalActions actions,
-  ) => tester.pumpWidget(
+    FakeExternalActions actions, {
+    bool alreadyPaid = false,
+  }) => tester.pumpWidget(
     MaterialApp(
       theme: AppTheme.light,
       home: IncidentScreen(
         services: buildServices(actions),
         report: report,
-        alreadyPaid: false,
+        alreadyPaid: alreadyPaid,
         preparedLocally: true,
       ),
     ),
   );
+
+  testWidgets('prevention draft does not show the recovery clock', (
+    WidgetTester tester,
+  ) async {
+    await pumpIncidentScreen(tester, FakeExternalActions());
+
+    expect(find.byKey(const Key('golden_hour_card')), findsNothing);
+    expect(find.text('When did the payment happen?'), findsNothing);
+  });
+
+  testWidgets('just-now recovery selection counts down', (
+    WidgetTester tester,
+  ) async {
+    await pumpIncidentScreen(tester, FakeExternalActions(), alreadyPaid: true);
+
+    await tester.tap(find.text('Just now'));
+    await tester.pump();
+    final Finder clock = find.byKey(const Key('recovery_clock'));
+    expect(clock, findsOneWidget);
+    final String initial = tester.widget<Text>(clock).data!;
+    expect(initial, matches(RegExp(r'^about (59|60):\d{2} left$')));
+
+    await tester.pump(const Duration(seconds: 3));
+    final String afterThreeSeconds = tester.widget<Text>(clock).data!;
+    expect(afterThreeSeconds, isNot(initial));
+  });
+
+  testWidgets('longer-ago selection encourages reporting without a countdown', (
+    WidgetTester tester,
+  ) async {
+    await pumpIncidentScreen(tester, FakeExternalActions(), alreadyPaid: true);
+
+    await tester.tap(find.text('Longer ago'));
+    await tester.pump();
+    expect(find.text('Report now'), findsOneWidget);
+    expect(find.byKey(const Key('recovery_clock')), findsNothing);
+    expect(find.byKey(const Key('call_1930_button')), findsOneWidget);
+  });
+
+  testWidgets('cancelling 1930 confirmation does not open the dialer', (
+    WidgetTester tester,
+  ) async {
+    final FakeExternalActions actions = FakeExternalActions();
+    await pumpIncidentScreen(tester, actions, alreadyPaid: true);
+    await tester.tap(find.text('Longer ago'));
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('call_1930_button')));
+    await tester.pumpAndSettle();
+    expect(find.text('Call 1930?'), findsOneWidget);
+    await tester.tap(find.text('Cancel'));
+    await tester.pumpAndSettle();
+
+    expect(actions.dialerOpenCount, 0);
+  });
 
   testWidgets('cancelling clipboard confirmation does not copy the report', (
     WidgetTester tester,

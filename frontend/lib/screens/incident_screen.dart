@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../services/app_services.dart';
@@ -24,6 +26,34 @@ class IncidentScreen extends StatefulWidget {
 
 class _IncidentScreenState extends State<IncidentScreen> {
   bool _copied = false;
+  _PaymentTiming? _paymentTiming;
+  Duration? _elapsedAtSelection;
+  DateTime? _selectedAt;
+  Duration _timerElapsed = Duration.zero;
+  Timer? _tick;
+  int? _lastAnnouncedMinute;
+  String? _clockAnnouncement;
+  bool _dialerUnavailable = false;
+
+  Duration? get _remaining {
+    final Duration? elapsedAtSelection = _elapsedAtSelection;
+    final DateTime? selectedAt = _selectedAt;
+    if (elapsedAtSelection == null || selectedAt == null) {
+      return null;
+    }
+    final Duration wallElapsed = DateTime.now().difference(selectedAt);
+    final Duration elapsed =
+        elapsedAtSelection +
+        (wallElapsed > _timerElapsed ? wallElapsed : _timerElapsed);
+    final Duration remaining = const Duration(hours: 1) - elapsed;
+    return remaining.isNegative ? Duration.zero : remaining;
+  }
+
+  @override
+  void dispose() {
+    _tick?.cancel();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) => Scaffold(
@@ -36,30 +66,7 @@ class _IncidentScreenState extends State<IncidentScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
           if (widget.alreadyPaid) ...<Widget>[
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(18),
-              decoration: BoxDecoration(
-                color: AppColors.dangerSurface,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(
-                  color: AppColors.danger.withValues(alpha: 0.35),
-                ),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: <Widget>[
-                  Text(
-                    'Act promptly',
-                    style: Theme.of(context).textTheme.titleLarge,
-                  ),
-                  const SizedBox(height: 8),
-                  const Text(
-                    'Contact your bank or UPI app through its official support channel. For immediate Indian financial-cyber-fraud reporting, call 1930. Keep the UTR/reference and screenshots ready.',
-                  ),
-                ],
-              ),
-            ),
+            _buildRecoveryClock(context),
             const SizedBox(height: 24),
           ],
           Text(
@@ -124,6 +131,170 @@ class _IncidentScreenState extends State<IncidentScreen> {
     ),
   );
 
+  Widget _buildRecoveryClock(BuildContext context) {
+    final Duration? remaining = _remaining;
+    final bool counting = remaining != null && remaining > Duration.zero;
+    final bool selected = _paymentTiming != null;
+    return Container(
+      key: const Key('golden_hour_card'),
+      width: double.infinity,
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: AppColors.dangerSurface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.danger.withValues(alpha: 0.35)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Text(
+            selected && !counting ? 'Report now' : 'Act promptly',
+            style: Theme.of(context).textTheme.titleLarge,
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            'Reporting quickly gives banks the best chance to hold the transferred money before it moves on. This is general guidance, not a guarantee.',
+          ),
+          const SizedBox(height: 10),
+          if (!selected) ...<Widget>[
+            const Text('When did the payment happen?'),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: <Widget>[
+                for (final _PaymentTiming timing in _PaymentTiming.values)
+                  ChoiceChip(
+                    key: Key('payment_timing_${timing.name}'),
+                    label: Text(timing.label),
+                    selected: false,
+                    onSelected: (_) => _selectTiming(timing),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            const Text(
+              'Contact your bank or UPI app through its official support channel. Keep the UTR/reference and screenshots ready.',
+            ),
+          ] else if (counting) ...<Widget>[
+            Semantics(
+              liveRegion: true,
+              label: _clockAnnouncement,
+              child: ExcludeSemantics(
+                child: Text(
+                  _formatRemaining(remaining),
+                  key: const Key('recovery_clock'),
+                  style: Theme.of(context).textTheme.displaySmall,
+                ),
+              ),
+            ),
+            const SizedBox(height: 10),
+            LinearProgressIndicator(
+              value:
+                  remaining.inMilliseconds /
+                  const Duration(hours: 1).inMilliseconds,
+            ),
+            const SizedBox(height: 12),
+            _buildCallButton(),
+          ] else ...<Widget>[
+            const Text(
+              'More than an hour may have passed. Reporting still matters — call 1930 and file at cybercrime.gov.in.',
+            ),
+            const SizedBox(height: 12),
+            _buildCallButton(),
+          ],
+          if (_dialerUnavailable) ...<Widget>[
+            const SizedBox(height: 10),
+            const Text('Dial this number manually:'),
+            const SelectableText('1930'),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCallButton() => FilledButton.icon(
+    key: const Key('call_1930_button'),
+    onPressed: _call1930,
+    icon: const Icon(Icons.call_outlined),
+    label: const Text('Call 1930'),
+  );
+
+  void _selectTiming(_PaymentTiming timing) {
+    _tick?.cancel();
+    final Duration? assumedElapsed = timing.assumedElapsed;
+    setState(() {
+      _paymentTiming = timing;
+      _elapsedAtSelection = assumedElapsed;
+      _selectedAt = assumedElapsed == null ? null : DateTime.now();
+      _timerElapsed = Duration.zero;
+      _dialerUnavailable = false;
+      _updateClockAnnouncement();
+    });
+    if (assumedElapsed == null) {
+      return;
+    }
+    _tick = Timer.periodic(const Duration(seconds: 1), (Timer timer) {
+      if (!mounted) {
+        timer.cancel();
+        return;
+      }
+      setState(() {
+        _timerElapsed += const Duration(seconds: 1);
+        _updateClockAnnouncement();
+        if (_remaining == Duration.zero) {
+          timer.cancel();
+        }
+      });
+    });
+  }
+
+  void _updateClockAnnouncement() {
+    final Duration? remaining = _remaining;
+    if (remaining == null || remaining == Duration.zero) {
+      _lastAnnouncedMinute = null;
+      _clockAnnouncement = null;
+      return;
+    }
+    final int minutes = (remaining.inSeconds / 60).ceil();
+    if (_lastAnnouncedMinute != minutes) {
+      _lastAnnouncedMinute = minutes;
+      _clockAnnouncement = 'About $minutes minutes remain in the first hour.';
+    }
+  }
+
+  String _formatRemaining(Duration remaining) {
+    final int minutes = remaining.inMinutes;
+    final int seconds = remaining.inSeconds.remainder(60);
+    final String paddedSeconds = seconds.toString().padLeft(
+      2,
+      String.fromCharCode(48),
+    );
+    return 'about $minutes:$paddedSeconds left';
+  }
+
+  Future<void> _call1930() async {
+    final bool confirmed = await confirmAction(
+      context,
+      title: 'Call 1930?',
+      message:
+          'This opens your phone dialer for India\'s cyber-fraud helpline. '
+          'FinGuard does not place the call or speak on your behalf.',
+      confirmLabel: 'Open dialer',
+    );
+    if (!confirmed || !mounted) {
+      return;
+    }
+    try {
+      await widget.services.externalActions.openDialer('tel:1930');
+    } on Object catch (error) {
+      if (mounted) {
+        setState(() => _dialerUnavailable = true);
+        showActionError(context, error);
+      }
+    }
+  }
+
   Future<void> _copy() async {
     final bool confirmed = await confirmAction(
       context,
@@ -164,4 +335,17 @@ class _IncidentScreenState extends State<IncidentScreen> {
       }
     }
   }
+}
+
+enum _PaymentTiming {
+  justNow('Just now', Duration.zero),
+  under15('Under 15 minutes ago', Duration(minutes: 15)),
+  underHour('Under an hour ago', Duration(minutes: 45)),
+  longer('Longer ago', null),
+  notSure('Not sure', null);
+
+  const _PaymentTiming(this.label, this.assumedElapsed);
+
+  final String label;
+  final Duration? assumedElapsed;
 }

@@ -92,6 +92,8 @@ The final score is the sum of applicable configured signal weights, clamped to 0
 |---|---:|
 | Seeded fraud-recipient match | 30 |
 | First-time payee on the device | 18 |
+| Amount not specified, with no corroborating warning | 5 |
+| Amount not specified, with a corroborating warning | 20 |
 | Unusual amount for a new payee | 15 |
 | Suspicious payment-note language | 10 |
 | Seeded identifier relationships | 8 |
@@ -102,6 +104,8 @@ The final score is the sum of applicable configured signal weights, clamped to 0
 | Context suspicious-support claim | 8 |
 
 Context flags contribute only when their validated extraction confidence is at least `0.55`. `payment_requested` is contextual evidence but has no independent weight, avoiding double-counting the payment request itself.
+
+An open amount is expected on many static merchant QRs. `AMOUNT_NOT_SPECIFIED` therefore contributes 5 points when it is alone apart from `FIRST_TIME_PAYEE`, which is explicitly not corroboration. It contributes 20 points only when a seeded-match, suspicious-note, seeded-relationship, or validated warning-context signal also fires. The emitted signal weight remains part of the deterministic score sum and the signal keeps its existing display position.
 
 Central thresholds are:
 
@@ -128,6 +132,8 @@ deterministic risk engine
 
 Gemini may flag impersonation, urgency, KYC threat, reward/refund language, a payment request, and suspicious support claims. It may not determine recipient reputation, assign a score/verdict, perform a report, or invent history. Provider errors, timeouts, quota exhaustion, missing keys, or malformed structured output return a normal fallback response rather than failing payment parsing/scoring.
 
+The separate risk-explanation service reads an already-stored assessment by ID and always has a deterministic template fallback. With explicit consent, Gemini may select one sentence from a dynamic schema enum containing only server-owned explanations derived from the final signals; the backend independently requires an exact allowlist match before display. Arbitrary provider prose is never rendered and provider output never feeds back into score, level, signals, or recommended action. Flutter keeps its matching local template primary, and seeded demos never call the explanation API.
+
 Screenshots are decoded only in memory, limited by configured size, checked against PNG/JPEG/WebP magic bytes, excluded from logging, and not persisted.
 
 ## Human-control boundary
@@ -139,9 +145,10 @@ Screenshots are decoded only in memory, limited by configured size, checked agai
 | CAUTION/HIGH handoff | Additional explicit warning confirmation |
 | Prepare incident draft | Confirmation; local/server draft only |
 | Copy draft | User presses copy |
+| Message saved trusted contact | Confirmation opens WhatsApp, then SMS or native share fallback; the user chooses Send |
 | Share trusted-contact message | Confirmation opens native share sheet; user chooses recipient and sends |
 | Open cybercrime portal | Confirmation opens the official website; nothing is submitted |
-| Use 1930 recovery guidance | The UI displays the official helpline; the user places any call outside FinGuard |
+| Use 1930 recovery guidance | Confirmation opens the dialer; the user places any call outside FinGuard |
 
 API responses state `external_actions_performed: false` and describe FinGuard's inability to freeze/reverse/intercept payments.
 

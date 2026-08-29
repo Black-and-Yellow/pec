@@ -20,7 +20,7 @@ void main() {
     expect(find.textContaining('never call the API'), findsOneWidget);
     expect(find.text('SAFE'), findsWidgets);
     expect(_score(tester), '0');
-    expect(find.text('Case 1 of 3'), findsOneWidget);
+    expect(find.text('Case 1 of 4'), findsOneWidget);
     expect(_previousButton(tester).onPressed, isNull);
     expect(_nextButton(tester).onPressed, isNotNull);
     expect(
@@ -31,23 +31,28 @@ void main() {
     await tester.tap(find.byKey(const Key('risk_lab_next_case')));
     await tester.pumpAndSettle();
 
-    expect(find.text('CAUTION'), findsWidgets);
-    expect(_score(tester), '33');
-    expect(find.text('Case 2 of 3'), findsOneWidget);
+    expect(find.text('SAFE'), findsWidgets);
+    expect(_score(tester), '23');
+    expect(find.text('Case 2 of 4'), findsOneWidget);
     expect(_previousButton(tester).onPressed, isNotNull);
     expect(_nextButton(tester).onPressed, isNotNull);
-    expect(
-      find.text('This is a first-time recipient on this device'),
-      findsOneWidget,
-    );
+    expect(find.text('Payment amount is not specified'), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('risk_lab_next_case')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('CAUTION'), findsWidgets);
+    expect(_score(tester), '33');
+    expect(find.text('Case 3 of 4'), findsOneWidget);
+    expect(_previousButton(tester).onPressed, isNotNull);
+    expect(_nextButton(tester).onPressed, isNotNull);
 
     await tester.tap(find.byKey(const Key('risk_lab_next_case')));
     await tester.pumpAndSettle();
 
     expect(find.text('HIGH RISK'), findsWidgets);
     expect(_score(tester), '99');
-    expect(find.text('Case 3 of 3'), findsOneWidget);
-    expect(_previousButton(tester).onPressed, isNotNull);
+    expect(find.text('Case 4 of 4'), findsOneWidget);
     expect(_nextButton(tester).onPressed, isNull);
     expect(
       find.text('Recipient matches a seeded scam indicator'),
@@ -58,7 +63,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(_score(tester), '33');
-    expect(find.text('Case 2 of 3'), findsOneWidget);
+    expect(find.text('Case 3 of 4'), findsOneWidget);
   });
 
   testWidgets('spectrum markers select the existing bundled outcomes', (
@@ -86,19 +91,19 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(_score(tester), '33');
-    expect(find.text('Case 2 of 3'), findsOneWidget);
+    expect(find.text('Case 3 of 4'), findsOneWidget);
 
     await tester.tap(find.byKey(const Key('risk_lab_spectrum_fake-kyc')));
     await tester.pumpAndSettle();
 
     expect(_score(tester), '99');
-    expect(find.text('Case 3 of 3'), findsOneWidget);
+    expect(find.text('Case 4 of 4'), findsOneWidget);
 
     await tester.tap(find.byKey(const Key('risk_lab_spectrum_coffee-shop')));
     await tester.pumpAndSettle();
 
     expect(_score(tester), '0');
-    expect(find.text('Case 1 of 3'), findsOneWidget);
+    expect(find.text('Case 1 of 4'), findsOneWidget);
     semantics.dispose();
   });
 
@@ -149,6 +154,10 @@ void main() {
       findsOneWidget,
     );
     expect(
+      find.byKey(const Key('risk_lab_spectrum_tea-stall')),
+      findsOneWidget,
+    );
+    expect(
       find.byKey(const Key('risk_lab_spectrum_marketplace-seller')),
       findsOneWidget,
     );
@@ -158,12 +167,17 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(next);
     await tester.pumpAndSettle();
-    expect(find.text('Case 2 of 3'), findsOneWidget);
+    expect(find.text('Case 2 of 4'), findsOneWidget);
     await tester.ensureVisible(next);
     await tester.pumpAndSettle();
     await tester.tap(next);
     await tester.pumpAndSettle();
-    expect(find.text('Case 3 of 3'), findsOneWidget);
+    expect(find.text('Case 3 of 4'), findsOneWidget);
+    await tester.ensureVisible(next);
+    await tester.pumpAndSettle();
+    await tester.tap(next);
+    await tester.pumpAndSettle();
+    expect(find.text('Case 4 of 4'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 }

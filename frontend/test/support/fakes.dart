@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:typed_data';
 import 'dart:ui';
 
@@ -5,10 +6,12 @@ import 'package:finguard/models/auth_session.dart';
 import 'package:finguard/models/context_analysis.dart';
 import 'package:finguard/models/payment.dart';
 import 'package:finguard/models/risk.dart';
+import 'package:finguard/models/risk_explanation.dart';
 import 'package:finguard/services/api_service.dart';
 import 'package:finguard/services/auth_api.dart';
 import 'package:finguard/services/auth_store.dart';
 import 'package:finguard/services/external_actions.dart';
+import 'package:finguard/services/share_intake.dart';
 
 final class FakeApi implements FinGuardApi {
   FakeApi({
@@ -16,14 +19,21 @@ final class FakeApi implements FinGuardApi {
     this.contextError,
     this.analyzeContextGate,
     this.parsePaymentGate,
+    this.explanationResult,
   });
 
   final bool contextAvailable;
   final ApiException? contextError;
   final Future<void>? analyzeContextGate;
   final Future<void>? parsePaymentGate;
+  final RiskExplanation? explanationResult;
   ContextAnalysis? lastScoreContext;
+  int analyzeContextCount = 0;
+  int parsePaymentCount = 0;
+  String? lastParsedPayment;
   int prepareResponseCount = 0;
+  int explainAssessmentCount = 0;
+  bool? lastExplanationConsent;
 
   @override
   Future<ContextAnalysis> analyzeContext({
@@ -32,6 +42,7 @@ final class FakeApi implements FinGuardApi {
     Uint8List? screenshotBytes,
     String? screenshotMimeType,
   }) async {
+    analyzeContextCount += 1;
     await analyzeContextGate;
     final ApiException? error = contextError;
     if (error != null) {
@@ -55,6 +66,8 @@ final class FakeApi implements FinGuardApi {
 
   @override
   Future<Payment> parsePayment(String upiUri) async {
+    parsePaymentCount += 1;
+    lastParsedPayment = upiUri;
     await parsePaymentGate;
     return Payment(
       upiUri: upiUri,
@@ -63,6 +76,22 @@ final class FakeApi implements FinGuardApi {
       amount: 100,
       currency: 'INR',
     );
+  }
+
+  @override
+  Future<RiskExplanation> explainAssessment({
+    required String assessmentId,
+    required bool consent,
+  }) async {
+    explainAssessmentCount += 1;
+    lastExplanationConsent = consent;
+    return explanationResult ??
+        const RiskExplanation(
+          available: true,
+          source: RiskExplanationSource.template,
+          status: 'ai_disabled',
+          explanation: 'Server template explanation.',
+        );
   }
 
   @override
@@ -105,10 +134,36 @@ final class FakeApi implements FinGuardApi {
   }
 }
 
+final class FakeShareIntake implements ShareIntake {
+  FakeShareIntake({String? initialText}) : _initialText = initialText;
+
+  String? _initialText;
+  final StreamController<String> _shares = StreamController<String>.broadcast();
+
+  @override
+  Future<String?> initialShare() async {
+    final String? shared = _initialText;
+    _initialText = null;
+    return shared;
+  }
+
+  @override
+  Stream<String> shares() => _shares.stream;
+
+  void emit(String text) => _shares.add(text);
+
+  Future<void> close() => _shares.close();
+}
+
 final class FakeExternalActions implements ExternalActions {
   int upiOpenCount = 0;
   int portalOpenCount = 0;
   int shareCount = 0;
+  int messageTrustedContactCount = 0;
+  int dialerOpenCount = 0;
+  String? messagedPhone;
+  String? messagedText;
+  String? dialedUri;
   String? copiedText;
 
   @override
@@ -125,6 +180,19 @@ final class FakeExternalActions implements ExternalActions {
   Future<void> openUpi(String rawUri) async {
     Payment.validateUpiUri(rawUri);
     upiOpenCount += 1;
+  }
+
+  @override
+  Future<void> messageTrustedContact(String phoneDigits, String message) async {
+    messageTrustedContactCount += 1;
+    messagedPhone = phoneDigits;
+    messagedText = message;
+  }
+
+  @override
+  Future<void> openDialer(String telUri) async {
+    dialerOpenCount += 1;
+    dialedUri = telUri;
   }
 
   @override

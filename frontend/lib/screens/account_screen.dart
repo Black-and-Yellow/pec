@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../models/trusted_contact.dart';
 import '../services/app_services.dart';
 import '../services/auth_controller.dart';
 import '../theme/app_theme.dart';
@@ -16,11 +17,13 @@ class AccountScreen extends StatefulWidget {
 
 class _AccountScreenState extends State<AccountScreen> {
   late final AuthController _auth = widget.services.auth!;
+  TrustedContact? _trustedContact;
 
   @override
   void initState() {
     super.initState();
     _auth.addListener(_onChanged);
+    _loadTrustedContact();
   }
 
   @override
@@ -85,6 +88,68 @@ class _AccountScreenState extends State<AccountScreen> {
               ),
             ),
             const SizedBox(height: 20),
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Text(
+                      'Trusted contact',
+                      style: Theme.of(context).textTheme.titleLarge,
+                    ),
+                    const SizedBox(height: 8),
+                    if (_trustedContact
+                        case final TrustedContact contact) ...<Widget>[
+                      Text(
+                        contact.name,
+                        style: Theme.of(context).textTheme.titleMedium,
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        contact.maskedPhone,
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: AppColors.inkMuted,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: <Widget>[
+                          OutlinedButton(
+                            key: const Key('edit_trusted_contact_button'),
+                            onPressed: _editTrustedContact,
+                            child: const Text('Edit'),
+                          ),
+                          TextButton(
+                            key: const Key('remove_trusted_contact_button'),
+                            onPressed: _removeTrustedContact,
+                            child: const Text('Remove'),
+                          ),
+                        ],
+                      ),
+                    ] else ...<Widget>[
+                      const Text(
+                        'Save one person you trust for a faster, user-confirmed WhatsApp or SMS handoff during a suspicious payment.',
+                      ),
+                      const SizedBox(height: 12),
+                      OutlinedButton(
+                        key: const Key('add_trusted_contact_button'),
+                        onPressed: _editTrustedContact,
+                        child: const Text('Save a trusted contact'),
+                      ),
+                    ],
+                    const SizedBox(height: 12),
+                    const PrivacyNote(
+                      text:
+                          'The name and phone number stay on this device and are never sent to the FinGuard API.',
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 20),
             if (guest)
               FilledButton(
                 key: const Key('leave_guest_button'),
@@ -117,6 +182,49 @@ class _AccountScreenState extends State<AccountScreen> {
         ),
       ),
     );
+  }
+
+  Future<void> _loadTrustedContact() async {
+    final TrustedContact? contact = await widget.services.store
+        .trustedContact();
+    if (!mounted) {
+      return;
+    }
+    setState(() => _trustedContact = contact);
+  }
+
+  Future<void> _editTrustedContact() async {
+    final TrustedContact? contact = await showTrustedContactEditor(
+      context,
+      initial: _trustedContact,
+    );
+    if (contact == null || !mounted) {
+      return;
+    }
+    await widget.services.store.setTrustedContact(contact);
+    if (!mounted) {
+      return;
+    }
+    setState(() => _trustedContact = contact);
+  }
+
+  Future<void> _removeTrustedContact() async {
+    final bool confirmed = await confirmAction(
+      context,
+      title: 'Remove trusted contact?',
+      message:
+          'This removes the locally stored name and phone number from this device.',
+      confirmLabel: 'Remove contact',
+      isDanger: true,
+    );
+    if (!confirmed || !mounted) {
+      return;
+    }
+    await widget.services.store.clearTrustedContact();
+    if (!mounted) {
+      return;
+    }
+    setState(() => _trustedContact = null);
   }
 
   Future<void> _leaveGuest() async {

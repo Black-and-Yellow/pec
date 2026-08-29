@@ -13,16 +13,17 @@ import '../widgets/common.dart';
 import 'paste_screen.dart';
 
 class ContextScreen extends StatefulWidget {
-  const ContextScreen({required this.services, super.key});
+  const ContextScreen({required this.services, super.key, this.initialText});
 
   final AppServices services;
+  final String? initialText;
 
   @override
   State<ContextScreen> createState() => _ContextScreenState();
 }
 
 class _ContextScreenState extends State<ContextScreen> {
-  final TextEditingController _controller = TextEditingController();
+  late final TextEditingController _controller;
   final ImagePicker _imagePicker = ImagePicker();
   bool _loading = false;
   bool _consentToExternalAi = false;
@@ -35,6 +36,7 @@ class _ContextScreenState extends State<ContextScreen> {
   @override
   void initState() {
     super.initState();
+    _controller = TextEditingController(text: widget.initialText);
     _controller.addListener(_invalidateEditedAnalysis);
   }
 
@@ -137,7 +139,7 @@ class _ContextScreenState extends State<ContextScreen> {
             contentPadding: EdgeInsets.zero,
             title: const Text('Allow optional Gemini analysis'),
             subtitle: const Text(
-              'If enabled, the server may send this selected message or screenshot to Gemini. You can leave this off and use local text rules.',
+              'If enabled, the server may send this selected message or screenshot to Gemini. If you continue to a payment check, it may also send the final signal labels and payment note for optional explanation wording. You can leave this off and use deterministic local wording.',
             ),
           ),
           if (_error != null) ...<Widget>[
@@ -289,6 +291,7 @@ class _ContextScreenState extends State<ContextScreen> {
         builder: (BuildContext context) => PasteScreen(
           services: widget.services,
           contextAnalysis: analysis.hasValidatedContext ? analysis : null,
+          consentToExternalAi: _consentToExternalAi,
         ),
       ),
     );

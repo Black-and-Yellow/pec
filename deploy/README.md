@@ -1,8 +1,8 @@
 # FinGuard on OCI Always Free
 
-This deployment targets an Ubuntu 24.04 ARM64 VM such as OCI
-`VM.Standard.A1.Flex` with about one OCPU and 2 GB RAM. It uses one-time
-architecture-native apt packages, a release-signed ARM64 Python wheelhouse,
+This deployment targets an Ubuntu 24.04 amd64 OCI
+`VM.Standard.E2.1.Micro`. It uses one-time architecture-native apt packages, a
+release-signed amd64 Python wheelhouse,
 Nginx, one Uvicorn worker, systemd, and SQLite. It does not install Docker or
 require an x86 compatibility layer.
 
@@ -26,12 +26,14 @@ only on `127.0.0.1:8000`. Nginx is the sole public application listener.
 
 ## One-time OCI host setup
 
-Use an Ubuntu 24.04 ARM64 image. In the OCI network security list or NSG, permit
+Use an Ubuntu 24.04 amd64 image. In the OCI network security list or NSG, permit
 TCP 80 and 443 publicly and restrict TCP 22 to trusted administrator addresses
-where practical. A quick architecture check should print `arm64`:
+where practical. The setup and release runners fail closed unless these checks
+print `amd64` and `x86_64`, respectively:
 
 ```bash
 dpkg --print-architecture
+uname -m
 ```
 
 Copy this `deploy` directory from a trusted checkout to the VM and run:
@@ -216,7 +218,7 @@ forward activation depend on brief GitHub API availability; it sends no token
 and stores the response only in the root-only temporary release directory.
 CI cross-resolves every exact runtime
 dependency, `pip`, and the PEP 517 build backend as binary wheels for Python 3.12
-on Ubuntu ARM64. It then proves that the set resolves again with indexes disabled,
+on Ubuntu amd64. It then proves that the set resolves again with indexes disabled,
 adds a checksum manifest, and signs one archive containing source, Web assets,
 deployment assets, requirements, and the complete wheelhouse. The root runner
 copies the archive and detached signature into a root-only temporary directory
@@ -311,10 +313,10 @@ selection. Apart from the GitHub freshness request, its only `curl` is the
 loopback post-activation health check.
 The signing boundary authenticates the exact wheel bytes selected by CI, so the
 CI runner, configured Python package index/TLS path, release-signing key, and
-reviewed exact version constraints remain trusted inputs. GitHub's x86 runner
-can resolve and inspect ARM64 wheel metadata but cannot execute those native
-wheels; the unprivileged compile/import check on the actual ARM64 host is the
-final architecture-native gate before downtime.
+reviewed exact version constraints remain trusted inputs. The CI runner
+cross-resolves the explicitly declared manylinux x86_64 target without treating
+its own interpreter as proof. The unprivileged compile/import check on the
+actual amd64 host is the final architecture-native gate before downtime.
 
 The signature uses OpenSSH namespace `finguard-release` and allowed-signers
 principal `finguard-ci`. A compromised writable SSH staging account can alter

@@ -173,6 +173,24 @@ class RiskScoreRequest(StrictModel):
         return value
 
 
+class RiskExplainRequest(StrictModel):
+    assessment_id: AssessmentId
+    consent_to_external_ai: StrictBool = False
+
+
+class RiskExplainResponse(StrictModel):
+    available: bool
+    source: Literal["gemini", "template"]
+    status: Literal[
+        "generated",
+        "ai_disabled",
+        "consent_required",
+        "provider_unavailable",
+        "malformed_response",
+    ]
+    explanation: str = Field(min_length=1, max_length=400)
+
+
 class RiskAssessmentPayload(BaseModel):
     model_config = ConfigDict(extra="ignore", str_strip_whitespace=True)
 

@@ -62,29 +62,56 @@ def test_caution_demo_transaction() -> None:
     ]
 
 
-@pytest.mark.parametrize(
-    ("known_payee", "expected_score"),
-    [(True, 30), (False, 48)],
-)
-def test_missing_amount_is_an_explainable_caution(
-    known_payee: bool, expected_score: int
-) -> None:
+def test_missing_amount_alone_stays_safe() -> None:
     result = RiskEngine().score(
         RiskInputs(
             payment=PaymentDetails(vpa="static.qr@upi"),
-            known_payee=known_payee,
+            known_payee=False,
             typical_amount=Decimal("240"),
             indicator=None,
         )
     )
 
-    assert result.score == expected_score
-    assert result.level is RiskLevel.CAUTION
+    assert result.score == 23
+    assert result.level is RiskLevel.SAFE
     amount_signal = next(
         signal for signal in result.signals if signal.code == "AMOUNT_NOT_SPECIFIED"
     )
-    assert amount_signal.weight == 30
-    assert "could not evaluate" in amount_signal.evidence
+    assert amount_signal.weight == 5
+    assert "normal for a static merchant QR" in amount_signal.evidence
+
+
+def test_missing_amount_with_seeded_match_escalates() -> None:
+    result = RiskEngine().score(
+        RiskInputs(
+            payment=PaymentDetails(vpa="secure-kyc-update@okaxis"),
+            known_payee=False,
+            typical_amount=Decimal("240"),
+            indicator=_indicator(),
+        )
+    )
+
+    amount_signal = next(
+        signal for signal in result.signals if signal.code == "AMOUNT_NOT_SPECIFIED"
+    )
+    assert amount_signal.weight == 20
+    assert result.score == 76
+    assert result.level is RiskLevel.HIGH
+
+
+def test_missing_amount_signal_keeps_display_position() -> None:
+    result = RiskEngine().score(
+        RiskInputs(
+            payment=PaymentDetails(vpa="secure-kyc-update@okaxis"),
+            known_payee=False,
+            typical_amount=Decimal("240"),
+            indicator=_indicator(),
+        )
+    )
+
+    signal_codes = [signal.code for signal in result.signals]
+    first_time_index = signal_codes.index("FIRST_TIME_PAYEE")
+    assert signal_codes[first_time_index + 1] == "AMOUNT_NOT_SPECIFIED"
 
 
 def test_seeded_scam_transaction() -> None:

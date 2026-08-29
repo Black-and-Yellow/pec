@@ -7,7 +7,8 @@ from dataclasses import dataclass
 class RiskWeights:
     seeded_fraud_match: int = 30
     first_time_payee: int = 18
-    amount_not_specified: int = 30
+    amount_not_specified: int = 5
+    amount_not_specified_corroborated: int = 20
     unusual_amount: int = 15
     suspicious_note: int = 10
     identifier_relationship: int = 8

@@ -8,6 +8,7 @@ import '../config/app_config.dart';
 import '../models/context_analysis.dart';
 import '../models/payment.dart';
 import '../models/risk.dart';
+import '../models/risk_explanation.dart';
 
 abstract interface class FinGuardApi {
   Future<Payment> parsePayment(String upiUri);
@@ -16,6 +17,11 @@ abstract interface class FinGuardApi {
     required Payment payment,
     required String deviceId,
     ContextAnalysis? context,
+  });
+
+  Future<RiskExplanation> explainAssessment({
+    required String assessmentId,
+    required bool consent,
   });
 
   Future<ContextAnalysis> analyzeContext({
@@ -110,6 +116,29 @@ final class ApiService implements FinGuardApi {
             'context_token': validatedContext.integrityToken!,
         });
     return RiskScoreResult.fromApiJson(json, requestedPayment: payment);
+  }
+
+  @override
+  Future<RiskExplanation> explainAssessment({
+    required String assessmentId,
+    required bool consent,
+  }) async {
+    final String safeId = assessmentId.trim();
+    if (safeId.isEmpty || safeId.length > 64) {
+      throw const ApiException('The risk assessment reference is invalid.');
+    }
+    final Map<String, Object?> json = await _post(
+      'api/v1/risk/explain',
+      <String, Object?>{
+        'assessment_id': safeId,
+        'consent_to_external_ai': consent,
+      },
+    );
+    try {
+      return RiskExplanation.fromApiJson(json);
+    } on FormatException catch (error) {
+      throw ApiException(error.message.toString());
+    }
   }
 
   @override

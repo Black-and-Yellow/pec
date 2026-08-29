@@ -20,8 +20,11 @@ SCAN OR PASTE -> SCORE EXPLAINABLY -> RESPOND WITH USER CONFIRMATION
 - A deterministic 0-100 risk engine with centralized weights and thresholds.
 - Visible evidence for every score contribution.
 - SAFE, CAUTION, and HIGH RISK paths with deliberate confirmation before risky handoff.
-- A guided 90-second offline Risk Lab with an outcome spectrum for comparing the three deterministic judge cases without API, AI, or payment-app access.
+- A guided 90-second offline Risk Lab with an outcome spectrum for comparing four deterministic judge cases, including a legitimate open-amount static QR, without API, AI, or payment-app access.
 - A three-step independent-verification checklist before any live CAUTION or HIGH RISK handoff can continue.
+- A ten-second cooling-off pause before a live HIGH RISK handoff can continue after its checklist.
+- An on-device trusted contact and Android text/plain share-target intake for messages or UPI requests.
+- An immediate deterministic plain-language score summary with optional, separately labelled, consent-gated Gemini wording that cannot alter or replace the assessment summary.
 - Protective actions, an "already paid" recovery flow, incident draft copy, the official Indian cybercrime route, and native trusted-contact sharing.
 - Optional Gemini text/image context extraction with explicit consent, strict structured output, and local-rule fallback.
 - Anonymous local check history and clearly labelled seeded demo history/reputation data.
@@ -43,7 +46,7 @@ FastAPI modular monolith
   `-- repositories -> SQLite
 ```
 
-Gemini extracts bounded context flags only. It never sets the final score or verdict. The deterministic service consumes any validated flags, applies the same centralized policy every time, and continues normally when Gemini is absent or over quota.
+Gemini may extract bounded context flags and, after explicit consent, select optional ancillary wording for an already-final stored assessment. The selectable explanations are server-owned sentences in a dynamic schema enum, and the backend independently requires an exact allowlist match, so arbitrary provider prose is never displayed. Gemini never sets the final score, verdict, signals, or recommended action. The deterministic service consumes any validated flags, applies the same centralized policy every time, renders its own explanation first, and continues normally when Gemini is absent, malformed, or over quota.
 
 See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for contracts, scoring, data flow, and trust boundaries.
 
@@ -193,6 +196,7 @@ OCI deployment uses SSH credentials rather than application API keys; see the de
 | `POST` | `/api/v1/auth/account/delete` | Permanently delete the authenticated identity and all sessions |
 | `POST` | `/api/v1/payments/parse` | Validate and canonicalize a `upi://pay` URI |
 | `POST` | `/api/v1/risk/score` | Persist an explainable deterministic assessment |
+| `POST` | `/api/v1/risk/explain` | Explain a stored final assessment; deterministic template with optional consent-gated wording |
 | `POST` | `/api/v1/context/analyze` | Optional consent-gated context extraction with fallback |
 | `POST` | `/api/v1/response/prepare` | Prepare prevention/recovery evidence and actions |
 | `GET` | `/api/v1/history` | Assessment history for the `X-FinGuard-Device-ID` capability header |
@@ -209,10 +213,11 @@ Every scoring transaction deletes expired `ASSESSED` records and prunes the olde
 | Scenario | Evidence | Expected result |
 |---|---|---:|
 | Coffee-shop QR, known payee, INR 180 | Existing seeded device pattern | `SAFE 0/100` |
+| Tea-stall sticker QR, first-time payee, amount entered later | First-time recipient + lightly weighted open amount | `SAFE 23/100` |
 | Marketplace seller, first-time payee, INR 4,500 | First-time recipient + unusual amount | `CAUTION 33/100` |
 | Fake KYC request, seeded VPA, INR 25,000 | Seed match + relationships + amount + KYC/urgency | `HIGH RISK 99/100` |
 
-The Flutter client includes matching bundled fixtures so the three judge cases remain usable if the network or Gemini is unavailable. Its guided Risk Lab moves through SAFE, CAUTION, and HIGH RISK on a selectable outcome spectrum, compares payment facts, scores, and evidence, then opens only a view-only demo result with payment, report, share, and already-paid actions suppressed. Seeded data is always labelled as demo data and is never presented as live bank, NPCI, or national fraud intelligence.
+The Flutter client includes matching bundled fixtures so all four judge cases remain usable if the network or Gemini is unavailable. Its guided Risk Lab moves through SAFE, CAUTION, and HIGH RISK on a selectable outcome spectrum, compares payment facts, scores, and evidence, then opens only a view-only demo result with payment, report, share, and already-paid actions suppressed. Seeded data is always labelled as demo data and is never presented as live bank, NPCI, or national fraud intelligence.
 
 ## Verification
 
@@ -243,7 +248,8 @@ Production startup may create the initial schema, but it is not a migration engi
 
 ## OCI Always Free deployment
 
-The production target is an Ubuntu ARM64 VM using one Uvicorn worker behind Nginx:
+The production target is an Ubuntu 24.04 amd64 OCI `VM.Standard.E2.1.Micro`
+using one Uvicorn worker behind Nginx:
 
 ```text
 /opt/finguard/backend/       API source and virtual environment
@@ -284,9 +290,12 @@ Keep `GEMINI_API_KEY` on the server, not in GitHub Actions. Certbot asks for a c
 - A SAFE result means no configured warning signal was found; it is not a guarantee that a recipient is legitimate.
 - FinGuard checks a request before handoff. It cannot observe what the user later approves in a UPI app.
 - A live CAUTION or HIGH RISK handoff stays disabled until the user acknowledges three independent checks, and still requires the existing warning confirmation; those acknowledgements are not proof that a recipient is legitimate.
+- A live HIGH RISK handoff also enforces a ten-second cooling-off pause after the three checks; the separate warning confirmation still follows.
 - It has no bank-internal, NPCI-internal, VPA-age, transaction-reversal, or government-report-submission access.
 - Recipient reputation and relationship counts are clearly labelled seeded hackathon fixtures.
 - Incident drafts and share messages remain on screen until the user explicitly copies, opens, or sends them.
+- The optional trusted-contact name and phone number are stored only on the device and are never sent to the FinGuard API. WhatsApp, SMS, dialer, and native-share actions all remain user-confirmed OS handoffs.
+- Plain-language summaries are display-only derivatives of a stored final assessment. Gemini may add separately labelled ancillary wording after consent, but it never replaces the deterministic summary; neither form can set or change score, verdict, signals, or recommended action.
 - Account sessions are production-hardened for this single-node deployment, but email verification and password recovery require choosing and configuring a transactional email provider before a public launch.
 - SQLite and one API worker are intentional for the included zero-cost OCI deployment. Horizontal scale requires a versioned migration to managed PostgreSQL/shared persistence and should be completed before traffic exceeds a single-node workload.
 - Store-distributed Android releases require a private Play signing key, package registration, and a Google OAuth Android client bound to the final signing certificate.

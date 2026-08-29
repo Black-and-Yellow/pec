@@ -1,7 +1,13 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 from fastapi.testclient import TestClient
+
+from app.config import Settings
+from app.integrations.gemini_client import GeminiClient
+from app.main import create_app
 
 
 def test_health_and_parse_contract(client: TestClient) -> None:
@@ -68,11 +74,19 @@ def test_all_demo_scenarios_are_stable_and_repeatable(client: TestClient) -> Non
     scenarios_response = client.get("/api/v1/demo/scenarios")
     assert scenarios_response.status_code == 200
     scenarios = scenarios_response.json()["scenarios"]
+    assert [scenario["id"] for scenario in scenarios] == [
+        "coffee-shop",
+        "tea-stall",
+        "marketplace-seller",
+        "fake-kyc",
+    ]
     assert [scenario["expected_level"] for scenario in scenarios] == [
+        "SAFE",
         "SAFE",
         "CAUTION",
         "HIGH",
     ]
+    assert [scenario["expected_score"] for scenario in scenarios] == [0, 23, 33, 99]
     expected_policies = {
         "SAFE": ("NORMAL", False),
         "CAUTION": ("DELIBERATE_CONFIRMATION", True),
@@ -103,7 +117,8 @@ def test_all_demo_scenarios_are_stable_and_repeatable(client: TestClient) -> Non
 
 
 def test_high_risk_response_requires_human_control(client: TestClient) -> None:
-    scenario = client.get("/api/v1/demo/scenarios").json()["scenarios"][2]
+    scenarios = client.get("/api/v1/demo/scenarios").json()["scenarios"]
+    scenario = next(item for item in scenarios if item["id"] == "fake-kyc")
     payment = client.post("/api/v1/payments/parse", json={"upi_uri": scenario["upi_uri"]}).json()[
         "payment"
     ]
@@ -179,6 +194,129 @@ def test_context_without_key_is_graceful(client: TestClient) -> None:
     assert response.json()["status"] == "ai_disabled"
     assert response.json()["context"]["urgency"] is True
     assert response.json()["context_token"]
+
+
+def test_risk_explain_returns_template_for_a_stored_assessment_when_ai_is_off(
+    client: TestClient,
+) -> None:
+    scored = client.post(
+        "/api/v1/risk/score",
+        json={
+            "payment": {
+                "vpa": "explain.person@upi",
+                "amount": 100,
+                "currency": "INR",
+            },
+            "device_id": "explain-device",
+        },
+    )
+    assessment_id = scored.json()["assessment_id"]
+
+    response = client.post(
+        "/api/v1/risk/explain",
+        json={
+            "assessment_id": assessment_id,
+            "consent_to_external_ai": True,
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["source"] == "template"
+    assert response.json()["status"] == "ai_disabled"
+    assert response.json()["available"] is True
+    assert "FinGuard rated this SAFE because" in response.json()["explanation"]
+
+
+def test_risk_explain_rejects_an_unknown_assessment(client: TestClient) -> None:
+    response = client.post(
+        "/api/v1/risk/explain",
+        json={
+            "assessment_id": "missing-assessment",
+            "consent_to_external_ai": False,
+        },
+    )
+
+    assert response.status_code == 404
+    assert response.json() == {
+        "error": {
+            "code": "ASSESSMENT_NOT_FOUND",
+            "message": "The requested risk assessment was not found",
+        }
+    }
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        {
+            "assessment_id": "missing-assessment",
+            "consent_to_external_ai": "true",
+        },
+        {
+            "assessment_id": "missing-assessment",
+            "consent_to_external_ai": False,
+            "score": 0,
+        },
+    ],
+)
+def test_risk_explain_request_is_strict(
+    client: TestClient,
+    body: dict[str, object],
+) -> None:
+    response = client.post("/api/v1/risk/explain", json=body)
+    assert response.status_code == 422
+    assert response.json()["error"]["code"] == "VALIDATION_ERROR"
+
+
+def test_risk_explain_falls_back_when_gemini_wording_is_malformed(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def contradict_assessment(
+        _: GeminiClient,
+        **__: object,
+    ) -> str:
+        return "This request is safe."
+
+    monkeypatch.setattr(
+        GeminiClient,
+        "explain_assessment",
+        contradict_assessment,
+    )
+    settings = Settings(
+        app_env="test",
+        database_url=f"sqlite:///{(tmp_path / 'explain-test.db').as_posix()}",
+        allowed_origins=(),
+        gemini_api_key="test-only-provider-key",
+        enable_ai_context=True,
+    )
+    with TestClient(create_app(settings)) as ai_client:
+        scored = ai_client.post(
+            "/api/v1/risk/score",
+            json={
+                "payment": {
+                    "vpa": "explain.person@upi",
+                    "amount": 4500,
+                    "currency": "INR",
+                },
+                "device_id": "explain-device",
+            },
+        )
+        before = scored.json()
+        response = ai_client.post(
+            "/api/v1/risk/explain",
+            json={
+                "assessment_id": before["assessment_id"],
+                "consent_to_external_ai": True,
+            },
+        )
+
+    assert response.status_code == 200
+    assert response.json()["source"] == "template"
+    assert response.json()["status"] == "malformed_response"
+    assert "rated this CAUTION" in response.json()["explanation"]
+    assert before["score"] == 33
+    assert before["level"] == "CAUTION"
 
 
 def test_source_none_context_response_has_no_integrity_token(client: TestClient) -> None:

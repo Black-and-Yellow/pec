@@ -12,6 +12,10 @@ abstract interface class ExternalActions {
 
   Future<void> shareTrustedContact(String message, {Rect? origin});
 
+  Future<void> messageTrustedContact(String phoneDigits, String message);
+
+  Future<void> openDialer(String telUri);
+
   Future<void> copyText(String text);
 }
 
@@ -52,6 +56,53 @@ final class PlatformExternalActions implements ExternalActions {
         sharePositionOrigin: origin,
       ),
     );
+  }
+
+  @override
+  Future<void> messageTrustedContact(String phoneDigits, String message) async {
+    if (!RegExp(r'^\d{10,15}$').hasMatch(phoneDigits)) {
+      throw const ExternalActionException(
+        'The trusted-contact number is invalid.',
+      );
+    }
+    final Uri whatsapp = Uri.https('wa.me', '/$phoneDigits', <String, String>{
+      'text': message,
+    });
+    try {
+      if (await launchUrl(whatsapp, mode: LaunchMode.externalApplication)) {
+        return;
+      }
+    } on Object {
+      // Try the device SMS handler next.
+    }
+    final Uri sms = Uri(
+      scheme: 'sms',
+      path: phoneDigits,
+      queryParameters: <String, String>{'body': message},
+    );
+    try {
+      if (await launchUrl(sms, mode: LaunchMode.externalApplication)) {
+        return;
+      }
+    } on Object {
+      // The caller will offer the existing share-sheet fallback.
+    }
+    throw const ExternalActionException(
+      'Could not open WhatsApp or SMS. Use the share sheet instead.',
+    );
+  }
+
+  @override
+  Future<void> openDialer(String telUri) async {
+    final Uri? uri = Uri.tryParse(telUri);
+    if (uri == null || uri.scheme != 'tel' || uri.path.isEmpty) {
+      throw const ExternalActionException('The phone number is invalid.');
+    }
+    if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
+      throw const ExternalActionException(
+        'The phone dialer could not be opened.',
+      );
+    }
   }
 
   @override

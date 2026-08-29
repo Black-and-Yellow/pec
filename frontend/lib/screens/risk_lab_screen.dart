@@ -46,7 +46,7 @@ class _RiskLabScreenState extends State<RiskLabScreen> {
           ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 760),
             child: Text(
-              'Explore the bundled SAFE, CAUTION and HIGH RISK outcomes side by side. These fixtures never call the API, AI or a UPI app.',
+              'Explore the bundled SAFE, CAUTION and HIGH RISK outcomes side by side, including a legitimate static QR that FinGuard deliberately leaves alone. These fixtures never call the API, AI or a UPI app.',
               style: Theme.of(
                 context,
               ).textTheme.bodyLarge?.copyWith(color: AppColors.inkMuted),
@@ -147,7 +147,7 @@ class _GuidedTour extends StatelessWidget {
         ),
         const SizedBox(height: 4),
         Text(
-          'Follow the three bundled outcomes from SAFE to HIGH RISK.',
+          'Follow the bundled outcomes from SAFE to HIGH RISK.',
           style: Theme.of(
             context,
           ).textTheme.bodyMedium?.copyWith(color: AppColors.inkMuted),

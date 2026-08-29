@@ -4,6 +4,7 @@ import 'dart:math';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/history_entry.dart';
+import '../models/trusted_contact.dart';
 
 abstract interface class LocalStore {
   Future<String> deviceId();
@@ -13,6 +14,12 @@ abstract interface class LocalStore {
   Future<void> addHistory(HistoryEntry entry);
 
   Future<void> clearHistory();
+
+  Future<TrustedContact?> trustedContact();
+
+  Future<void> setTrustedContact(TrustedContact contact);
+
+  Future<void> clearTrustedContact();
 }
 
 final class PreferencesLocalStore implements LocalStore {
@@ -21,6 +28,7 @@ final class PreferencesLocalStore implements LocalStore {
 
   static const String _deviceKey = 'anonymous_device_id_v1';
   static const String _historyKey = 'local_check_history_v1';
+  static const String _trustedContactKey = 'trusted_contact_v1';
   static const int _maxHistoryEntries = 20;
 
   final SharedPreferencesAsync _preferences;
@@ -115,6 +123,48 @@ final class PreferencesLocalStore implements LocalStore {
       // There is no local data to clear when the platform store is unavailable.
     }
   }
+
+  @override
+  Future<TrustedContact?> trustedContact() async {
+    try {
+      final String? encoded = await _preferences.getString(_trustedContactKey);
+      if (encoded == null || encoded.isEmpty) {
+        return null;
+      }
+      final Object? decoded = jsonDecode(encoded);
+      if (decoded is! Map<Object?, Object?>) {
+        return null;
+      }
+      return TrustedContact.fromJson(
+        decoded.map(
+          (Object? key, Object? value) => MapEntry(key.toString(), value),
+        ),
+      );
+    } on Object {
+      return null;
+    }
+  }
+
+  @override
+  Future<void> setTrustedContact(TrustedContact contact) async {
+    try {
+      await _preferences.setString(
+        _trustedContactKey,
+        jsonEncode(contact.toJson()),
+      );
+    } on Object {
+      // A storage failure must not block a payment safety check.
+    }
+  }
+
+  @override
+  Future<void> clearTrustedContact() async {
+    try {
+      await _preferences.remove(_trustedContactKey);
+    } on Object {
+      // There is no trusted contact to clear when storage is unavailable.
+    }
+  }
 }
 
 final class MemoryLocalStore implements LocalStore {
@@ -122,6 +172,7 @@ final class MemoryLocalStore implements LocalStore {
 
   final String fixedDeviceId;
   final List<HistoryEntry> _entries = <HistoryEntry>[];
+  TrustedContact? _trustedContact;
 
   @override
   Future<void> addHistory(HistoryEntry entry) async {
@@ -139,4 +190,17 @@ final class MemoryLocalStore implements LocalStore {
   @override
   Future<List<HistoryEntry>> history() async =>
       List<HistoryEntry>.unmodifiable(_entries);
+
+  @override
+  Future<TrustedContact?> trustedContact() async => _trustedContact;
+
+  @override
+  Future<void> setTrustedContact(TrustedContact contact) async {
+    _trustedContact = contact;
+  }
+
+  @override
+  Future<void> clearTrustedContact() async {
+    _trustedContact = null;
+  }
 }
