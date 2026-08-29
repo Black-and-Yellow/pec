@@ -12,7 +12,7 @@
   {
     "id": "tea-stall",
     "title": "Tea-stall sticker QR",
-    "description": "Static merchant QR with no amount — the most common legitimate UPI request in India.",
+    "description": "Static merchant QR with no amount \u2014 the most common legitimate UPI request in India.",
     "upi_uri": "upi://pay?pa=chai.point%40okicici&pn=Chai%20Point&cu=INR",
     "device_id": "demo-device",
     "context": null,
@@ -22,8 +22,8 @@
   {
     "id": "marketplace-seller",
     "title": "Marketplace seller",
-    "description": "First-time recipient and a moderately unusual INR 4,500 request.",
-    "upi_uri": "upi://pay?pa=market.seller%40okaxis&pn=Marketplace%20Seller&am=4500.00&cu=INR&tn=Order%20payment",
+    "description": "A seller nobody in the network has met, asking for INR 4,500.",
+    "upi_uri": "upi://pay?pa=swift.resale%40okaxis&pn=Marketplace%20Seller&am=4500.00&cu=INR&tn=Order%20payment",
     "device_id": "demo-device",
     "context": null,
     "expected_level": "CAUTION",
@@ -45,6 +45,6 @@
       "confidence": 0.96
     },
     "expected_level": "HIGH",
-    "expected_score": 99
+    "expected_score": 100
   }
 ]

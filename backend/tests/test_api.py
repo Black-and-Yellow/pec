@@ -85,13 +85,13 @@ def test_all_demo_scenarios_are_stable_and_repeatable(client: TestClient) -> Non
     expected_results = {
         "coffee-shop": ((0, 0), "SAFE"),
         "tea-stall": ((23, 23), "SAFE"),
-        # Payee history legitimately improves trust after the first assessment.
-        "marketplace-seller": ((27, 24), "SAFE"),
+        "marketplace-seller": ((33, 33), "CAUTION"),
         "fake-kyc": ((100, 100), "HIGH"),
     }
 
     expected_policies = {
         "SAFE": ("NORMAL", False),
+        "CAUTION": ("DELIBERATE_CONFIRMATION", True),
         "HIGH": ("PAUSED", True),
     }
 

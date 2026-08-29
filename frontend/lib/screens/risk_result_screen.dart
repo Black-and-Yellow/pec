@@ -205,7 +205,13 @@ class _RiskResultScreenState extends State<RiskResultScreen> {
         ),
         if (_claimedPayeeName case final String claimed) ...<Widget>[
           const SizedBox(height: 18),
-          _PayeeNameClaimCard(claimedName: claimed),
+          _PayeeNameClaimCard(
+            claimedName: claimed,
+            // On a safe verdict this is a useful habit, not a warning. Painting
+            // it caution-yellow beside a green SAFE header makes the screen
+            // argue with itself, and teaches people to discount the colour.
+            advisory: widget.assessment.level == RiskLevel.safe,
+          ),
         ],
         const SizedBox(height: 14),
         CollapsibleSection(
@@ -1266,9 +1272,13 @@ class _VerificationCheckbox extends StatelessWidget {
 /// plainly what to do when the two disagree. A limitation stated precisely is
 /// more useful to someone mid-payment than a reassurance that is not earned.
 class _PayeeNameClaimCard extends StatelessWidget {
-  const _PayeeNameClaimCard({required this.claimedName});
+  const _PayeeNameClaimCard({required this.claimedName, this.advisory = false});
 
   final String claimedName;
+
+  /// Renders as a neutral note rather than a warning. Used when the verdict
+  /// itself is safe and this is only a step worth taking.
+  final bool advisory;
 
   @override
   Widget build(BuildContext context) => Container(
@@ -1276,14 +1286,20 @@ class _PayeeNameClaimCard extends StatelessWidget {
     width: double.infinity,
     padding: const EdgeInsets.all(16),
     decoration: BoxDecoration(
-      color: AppColors.cautionSurface,
+      color: advisory ? AppColors.surfaceMuted : AppColors.cautionSurface,
       borderRadius: BorderRadius.circular(10),
-      border: Border.all(color: AppColors.caution),
+      border: Border.all(
+        color: advisory ? AppColors.border : AppColors.caution,
+      ),
     ),
     child: Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
-        const Icon(Icons.badge_outlined, color: AppColors.caution, size: 22),
+        Icon(
+          Icons.badge_outlined,
+          color: advisory ? AppColors.inkMuted : AppColors.caution,
+          size: 22,
+        ),
         const SizedBox(width: 12),
         Expanded(
           child: Column(

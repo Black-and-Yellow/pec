@@ -51,7 +51,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('HIGH RISK'), findsWidgets);
-    expect(_score(tester), '99');
+    expect(_score(tester), '100');
     expect(find.text('Case 4 of 4'), findsOneWidget);
     expect(_nextButton(tester).onPressed, isNull);
     expect(
@@ -96,7 +96,7 @@ void main() {
     await tester.tap(find.byKey(const Key('risk_lab_spectrum_fake-kyc')));
     await tester.pumpAndSettle();
 
-    expect(_score(tester), '99');
+    expect(_score(tester), '100');
     expect(find.text('Case 4 of 4'), findsOneWidget);
 
     await tester.tap(find.byKey(const Key('risk_lab_spectrum_coffee-shop')));

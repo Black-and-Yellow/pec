@@ -65,8 +65,8 @@ final class DemoRepository {
       subtitle: 'First-time recipient · ₹4,500',
       payment: Payment(
         upiUri:
-            'upi://pay?pa=market.seller%40okaxis&pn=Marketplace%20Seller&am=4500.00&cu=INR&tn=Order%20payment',
-        payeeVpa: 'market.seller@okaxis',
+            'upi://pay?pa=swift.resale%40okaxis&pn=Marketplace%20Seller&am=4500.00&cu=INR&tn=Order%20payment',
+        payeeVpa: 'swift.resale@okaxis',
         payeeName: 'Marketplace Seller',
         amount: 4500,
         note: 'Order payment',
@@ -84,11 +84,12 @@ final class DemoRepository {
                 'No completed payment to this VPA exists in this device\'s local history',
           ),
           RiskSignal(
-            code: 'UNUSUAL_AMOUNT',
-            label: 'Amount is unusually high for a new recipient',
+            code: 'AMOUNT_SCALED_BY_TRUST',
+            label: "Amount risk is scaled by the recipient's network record",
             weight: 15,
             evidence:
-                'INR 4500.00 meets the local-history threshold of INR 2000.00',
+                'INR 4500.00 is high for a new recipient; payee trust grade NEW '
+                'scales this contribution.',
           ),
         ],
         recommendedAction:
@@ -110,61 +111,89 @@ final class DemoRepository {
         transactionReference: 'DEMO-KYC-001',
       ),
       assessment: RiskAssessment(
-        score: 99,
+        score: 100,
         level: RiskLevel.highRisk,
         signals: <RiskSignal>[
           RiskSignal(
-            code: 'SEEDED_FRAUD_MATCH',
-            label: 'Recipient matches a seeded scam indicator',
+            code: "PAYEE_ADDRESS_PRETEXT",
+            label: "The address names a reason to pay rather than a payee",
+            weight: 16,
+            evidence:
+                "The word secure appears in the address itself. Genuine payees are named after a person or a shop, not after the excuse for the payment.",
+          ),
+          RiskSignal(
+            code: "SEEDED_FRAUD_MATCH",
+            label: "Recipient matches a seeded scam indicator",
             weight: 30,
             evidence:
                 "VPA matched 'Seeded fake KYC payment recipient' in clearly labelled seeded demo data",
           ),
           RiskSignal(
-            code: 'FIRST_TIME_PAYEE',
-            label: 'This is a first-time recipient on this device',
+            code: "FIRST_TIME_PAYEE",
+            label: "This is a first-time recipient on this device",
             weight: 18,
             evidence:
-                'No completed payment to this VPA exists in this device\'s local history',
+                "No completed payment to this VPA exists in this device's local history",
           ),
           RiskSignal(
-            code: 'UNUSUAL_AMOUNT',
-            label: 'Amount is unusually high for a new recipient',
-            weight: 15,
+            code: "MULE_ACCOUNT_SIGNATURE",
+            label: "This address is collecting like a money-mule account",
+            weight: 22,
             evidence:
-                'INR 25000.00 meets the local-history threshold of INR 2000.00',
+                "57 different people have checked this address in 9 day(s), 89% for the first and only time. Mule accounts collect from many unrelated payers at once, then go quiet. A busy new business can look the same, so treat this as a reason to confirm who you are paying, not as proof of fraud.",
           ),
           RiskSignal(
-            code: 'SUSPICIOUS_PAYMENT_NOTE',
+            code: "PAYEE_NAME_UNVERIFIED",
+            label: "The claimed payee name is not independently verified",
+            weight: 0,
+            evidence:
+                "The payee name comes from the payment request and cannot be verified from the VPA alone. Compare it against the bank-verified name your UPI app is required to show on the confirmation screen.",
+          ),
+          RiskSignal(
+            code: "AMOUNT_SCALED_BY_TRUST",
+            label: "Amount risk is scaled by the recipient's network record",
+            weight: 20,
+            evidence:
+                "INR 25000.00 is high for a new recipient; payee trust grade D scales this contribution.",
+          ),
+          RiskSignal(
+            code: "QR_PROVENANCE_MISSING",
+            label: "Merchant-shaped QR does not include provenance fields",
+            weight: 8,
+            evidence:
+                "The supplied QR describes a priced merchant payment but does not include a sign or organisation identifier. FinGuard only checks field presence; it cannot validate NPCI signatures.",
+          ),
+          RiskSignal(
+            code: "SUSPICIOUS_PAYMENT_NOTE",
             label:
-                'Payment note contains suspicious pressure or pretext language',
+                "Payment note contains suspicious pressure or pretext language",
             weight: 10,
             evidence:
-                'The supplied payment note contains urgency, KYC, support, or reward wording',
+                "The supplied payment note contains urgency, KYC, support, or reward wording",
           ),
           RiskSignal(
-            code: 'SEEDED_IDENTIFIER_RELATIONSHIP',
-            label: 'Recipient is linked to other seeded suspicious identifiers',
+            code: "SEEDED_IDENTIFIER_RELATIONSHIP",
+            label: "Recipient is linked to other seeded suspicious identifiers",
             weight: 8,
             evidence:
-                'Seeded demo data links this VPA to 4 other identifier(s) and 3 seeded report(s)',
+                "Seeded demo data links this VPA to 4 other identifier(s) and 3 seeded report(s)",
           ),
           RiskSignal(
-            code: 'CONTEXT_URGENCY',
-            label: 'Message applies unusual urgency or pressure',
+            code: "CONTEXT_URGENCY",
+            label: "Message applies unusual urgency or pressure",
             weight: 8,
-            evidence: 'User-supplied context analysis flagged urgency language',
+            evidence: "User-supplied context analysis flagged urgency language",
           ),
           RiskSignal(
-            code: 'CONTEXT_KYC_THREAT',
-            label: 'Message uses a KYC or account-blocking threat',
+            code: "CONTEXT_KYC_THREAT",
+            label: "Message uses a KYC or account-blocking threat",
             weight: 10,
             evidence:
-                'User-supplied context analysis flagged a KYC-related threat',
+                "User-supplied context analysis flagged a KYC-related threat",
           ),
         ],
         recommendedAction:
-            'Stop the UPI handoff and verify the recipient independently. Prepare recovery actions if you already paid.',
+            "Stop the UPI handoff and verify the recipient independently. Prepare recovery actions if you already paid.",
       ),
     ),
   ];

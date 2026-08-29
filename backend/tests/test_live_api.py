@@ -51,7 +51,7 @@ def test_live_uvicorn_health_parse_errors_and_demo_risk_results(
         expected_results = {
             "coffee-shop": (0, "SAFE"),
             "tea-stall": (23, "SAFE"),
-            "marketplace-seller": (27, "SAFE"),
+            "marketplace-seller": (33, "CAUTION"),
             "fake-kyc": (100, "HIGH"),
         }
         observed_levels: list[str] = []
@@ -76,7 +76,7 @@ def test_live_uvicorn_health_parse_errors_and_demo_risk_results(
             assert score["level"] == expected_level
             observed_levels.append(score["level"])
 
-        assert observed_levels == ["SAFE", "SAFE", "SAFE", "HIGH"]
+        assert observed_levels == ["SAFE", "SAFE", "CAUTION", "HIGH"]
 
         local_analysis = client.post(
             "/api/v1/context/analyze",

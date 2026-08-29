@@ -405,14 +405,23 @@ class _ScoreMeter extends StatelessWidget {
           Row(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: <Widget>[
-              Text(
-                '${assessment.score}',
-                key: const Key('risk_lab_score'),
-                style: Theme.of(context).textTheme.displaySmall?.copyWith(
-                  color: _levelColor(assessment.level),
-                  fontFeatures: const <FontFeature>[
-                    FontFeature.tabularFigures(),
-                  ],
+              // A three-digit score at a large text size is wider than the
+              // row can give it, and 100 is a score this screen is meant to
+              // show. Shrinking beats overflowing.
+              Flexible(
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    '${assessment.score}',
+                    key: const Key('risk_lab_score'),
+                    style: Theme.of(context).textTheme.displaySmall?.copyWith(
+                      color: _levelColor(assessment.level),
+                      fontFeatures: const <FontFeature>[
+                        FontFeature.tabularFigures(),
+                      ],
+                    ),
+                  ),
                 ),
               ),
               Expanded(

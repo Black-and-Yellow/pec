@@ -178,7 +178,7 @@ void main() {
 
     expect(find.text('HIGH RISK'), findsOneWidget);
     expect(find.byKey(const Key('risk_score')), findsOneWidget);
-    expect(find.text('99'), findsOneWidget);
+    expect(find.text('100'), findsOneWidget);
     expect(find.text('SEEDED DEMO DATA'), findsOneWidget);
 
     // The signal breakdown is a closed-by-default disclosure now.
