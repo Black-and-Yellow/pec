@@ -10,16 +10,23 @@ class PageBody extends StatelessWidget {
     super.key,
     this.maxWidth = 1040,
     this.padding,
+    this.physics,
   });
 
   final Widget child;
   final double maxWidth;
   final EdgeInsetsGeometry? padding;
 
+  /// Opt-in override, used by screens that host a [RefreshIndicator]: pull to
+  /// refresh needs an always-scrollable child to react to, which a page whose
+  /// content is shorter than the viewport does not otherwise provide.
+  final ScrollPhysics? physics;
+
   @override
   Widget build(BuildContext context) => SafeArea(
     top: false,
     child: SingleChildScrollView(
+      physics: physics,
       padding:
           padding ??
           const EdgeInsets.only(left: 20, right: 20, top: 22, bottom: 40),

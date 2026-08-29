@@ -48,13 +48,44 @@ class RiskResultScreen extends StatefulWidget {
 }
 
 class _RiskResultScreenState extends State<RiskResultScreen> {
-  static const int _coolOffSeconds = 10;
+  /// Used when no live trust report exists: saved history entries and bundled
+  /// demos were never scored against the ledger, so they keep the original
+  /// fixed pause rather than inheriting a grade they never earned.
+  static const int _unratedCoolOffSeconds = 10;
+
+  /// The shortest pause any high-risk result may impose.
+  ///
+  /// The pause exists only for HIGH verdicts, so letting a good grade drive it
+  /// to zero would switch the safeguard off in the case that needs it most: a
+  /// trusted merchant whose QR was swapped, or a payer being talked into
+  /// sending money to an ordinary-looking account. A well-regarded payee and a
+  /// dangerous payment are different claims, and reputation cannot answer the
+  /// second one.
+  static const int _minimumCoolOffSeconds = 5;
+
+  /// How long the deliberate pause lasts, scaled by what the network knows
+  /// about the recipient.
+  ///
+  /// A stranger earns a longer stop than an address hundreds of payers have
+  /// used without incident. Scammers rely on speed, so the less FinGuard can
+  /// say about who is being paid, the more deliberate the last step becomes —
+  /// but never less than [_minimumCoolOffSeconds], because the verdict that
+  /// triggered this pause was reached on evidence the payee's record does not
+  /// override.
+  int get _coolOffSeconds => switch (widget.payeeTrust?.grade) {
+    TrustGrade.aPlus || TrustGrade.a => _minimumCoolOffSeconds,
+    TrustGrade.b => 5,
+    TrustGrade.isNew => 10,
+    TrustGrade.c => 15,
+    TrustGrade.d => 20,
+    null => _unratedCoolOffSeconds,
+  };
 
   bool _preparingReport = false;
   final Set<_VerificationCheck> _completedVerifications =
       <_VerificationCheck>{};
   Timer? _coolOffTimer;
-  int _coolOffRemaining = _coolOffSeconds;
+  late int _coolOffRemaining;
   TrustedContact? _trustedContact;
   late RiskExplanation _explanation;
   RiskExplanation? _aiWording;
@@ -62,6 +93,7 @@ class _RiskResultScreenState extends State<RiskResultScreen> {
   @override
   void initState() {
     super.initState();
+    _coolOffRemaining = _coolOffSeconds;
     _explanation = RiskExplanation(
       available: true,
       source: RiskExplanationSource.template,
@@ -93,6 +125,22 @@ class _RiskResultScreenState extends State<RiskResultScreen> {
       widget.assessment.level == RiskLevel.highRisk;
 
   bool get _coolOffComplete => !_requiresCoolOff || _coolOffRemaining == 0;
+
+  /// The name the request claims, when the server has told us it is a claim.
+  ///
+  /// The signal is what licenses the card: FinGuard cannot read the bank's
+  /// registered name, so it only ever says this out loud when the scoring
+  /// policy has flagged the name as unverifiable. Null means say nothing.
+  String? get _claimedPayeeName {
+    final bool unverified = widget.assessment.signals.any(
+      (RiskSignal signal) => signal.code == 'PAYEE_NAME_UNVERIFIED',
+    );
+    if (!unverified) {
+      return null;
+    }
+    final String claimed = widget.payment.payeeName?.trim() ?? '';
+    return claimed.isEmpty ? null : claimed;
+  }
 
   @override
   void dispose() {
@@ -132,6 +180,10 @@ class _RiskResultScreenState extends State<RiskResultScreen> {
           headerKey: const Key('payment_details_toggle'),
           child: _PaymentDetails(payment: widget.payment),
         ),
+        if (_claimedPayeeName case final String claimed) ...<Widget>[
+          const SizedBox(height: 18),
+          _PayeeNameClaimCard(claimedName: claimed),
+        ],
         const SizedBox(height: 14),
         CollapsibleSection(
           title: 'Why do we say this?',
@@ -296,7 +348,10 @@ class _RiskResultScreenState extends State<RiskResultScreen> {
         _coolOffRemaining = _coolOffSeconds;
       }
     });
+    // A zero-length pause needs no timer: starting one would tick straight
+    // past zero and rebuild the screen for nothing.
     if (_requiresCoolOff &&
+        _coolOffSeconds > 0 &&
         _independentVerificationComplete &&
         _coolOffTimer == null) {
       _coolOffTimer = Timer.periodic(const Duration(seconds: 1), (Timer timer) {
@@ -1168,5 +1223,80 @@ class _VerificationCheckbox extends StatelessWidget {
     dense: true,
     visualDensity: VisualDensity.compact,
     title: Text(label, style: Theme.of(context).textTheme.bodySmall),
+  );
+}
+
+
+/// Tells the user where to look next, rather than passing a verdict.
+///
+/// The name in a UPI request is set by whoever generated it. FinGuard cannot
+/// check it against the bank record and does not pretend to. What it can do is
+/// name the one screen where the real registered name does appear, and say
+/// plainly what to do when the two disagree. A limitation stated precisely is
+/// more useful to someone mid-payment than a reassurance that is not earned.
+class _PayeeNameClaimCard extends StatelessWidget {
+  const _PayeeNameClaimCard({required this.claimedName});
+
+  final String claimedName;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    key: const Key('payee_name_unverified_card'),
+    width: double.infinity,
+    padding: const EdgeInsets.all(16),
+    decoration: BoxDecoration(
+      color: AppColors.cautionSurface,
+      borderRadius: BorderRadius.circular(10),
+      border: Border.all(color: AppColors.caution),
+    ),
+    child: Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        const Icon(Icons.badge_outlined, color: AppColors.caution, size: 22),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Text(
+                'Check this name on the next screen',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+              const SizedBox(height: 8),
+              Text.rich(
+                TextSpan(
+                  children: <InlineSpan>[
+                    const TextSpan(text: 'This request claims to be from '),
+                    TextSpan(
+                      text: claimedName,
+                      style: const TextStyle(fontWeight: FontWeight.w700),
+                    ),
+                    const TextSpan(
+                      text:
+                          '. That name was written by whoever created this '
+                          'request, and FinGuard cannot check it against the '
+                          'bank record.',
+                    ),
+                  ],
+                ),
+                key: const Key('payee_name_unverified_claim'),
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  height: 1.5,
+                ),
+              ),
+              const SizedBox(height: 10),
+              Text(
+                'Your UPI app will show the real registered name before you '
+                'authorize anything. If it does not match, stop there.',
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  height: 1.5,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    ),
   );
 }
