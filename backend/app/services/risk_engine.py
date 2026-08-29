@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
-from decimal import Decimal
+from decimal import ROUND_CEILING, Decimal
 from typing import Any
 
 from app.db.models import FraudIndicator
@@ -14,12 +14,14 @@ from app.schemas import (
     EnvironmentSignals,
     PayeeTrust,
     PaymentDetails,
+    QrProvenance,
     RemoteAccessTool,
     RiskAssessmentPayload,
     RiskLevel,
     RiskSignal,
     TrustGrade,
 )
+from app.services.vpa_identity import borrowed_brand_in_claimed_name
 
 REMOTE_ACCESS_TOOL_LABELS: dict[RemoteAccessTool, str] = {
     RemoteAccessTool.ANYDESK: "AnyDesk",
@@ -60,6 +62,19 @@ CORROBORATING_SIGNAL_CODES = frozenset(
     }
 )
 
+# These are ordering steps, not policy weights. The policy-supplied ceiling
+# controls the maximum score contribution and is the sole authority for it.
+TRUST_GRADE_SEVERITY: dict[TrustGrade, int] = {
+    TrustGrade.A_PLUS: 0,
+    TrustGrade.A: 1,
+    TrustGrade.B: 2,
+    TrustGrade.C: 3,
+    TrustGrade.NEW: 4,
+    TrustGrade.D: 5,
+}
+MAXIMUM_TRUST_GRADE_SEVERITY = max(TRUST_GRADE_SEVERITY.values())
+AMOUNT_SCALE_SATURATION_MULTIPLIER = Decimal("5")
+
 
 @dataclass(frozen=True, slots=True)
 class RiskInputs:
@@ -68,6 +83,7 @@ class RiskInputs:
     typical_amount: Decimal | None
     indicator: FraudIndicator | None
     context: ContextSignals | None = None
+    qr_provenance: QrProvenance | None = None
     environment: EnvironmentSignals | None = None
     payee_trust: PayeeTrust | None = None
 
@@ -148,9 +164,7 @@ class RiskEngine:
 
         trust = inputs.payee_trust
         if trust is not None:
-            signals.extend(
-                self._trust_signals(trust, seeded_match=inputs.indicator is not None)
-            )
+            signals.extend(self._trust_signals(trust, seeded_match=inputs.indicator is not None))
 
         if inputs.indicator is not None:
             signals.append(
@@ -177,6 +191,31 @@ class RiskEngine:
                 )
             )
 
+        if payment.payee_name is not None:
+            borrowed_brand = borrowed_brand_in_claimed_name(
+                payment.payee_name,
+                payment.vpa,
+            )
+            weight = (
+                self._weights.payee_name_unverified_borrowed_brand
+                if borrowed_brand is not None
+                else self._weights.payee_name_unverified_informational
+            )
+            evidence = (
+                f"The claimed payee name uses '{borrowed_brand}', but the VPA handle does not "
+                "back that organisation. Verify the VPA independently."
+                if borrowed_brand is not None
+                else "The payee name comes from the payment request and cannot be verified "
+                "from the VPA alone."
+            )
+            signals.append(
+                RiskSignal(
+                    code="PAYEE_NAME_UNVERIFIED",
+                    label="The claimed payee name is not independently verified",
+                    weight=weight,
+                    evidence=evidence,
+                )
+            )
         amount_signal_index = len(signals)
 
         unusual_threshold = self._unusual_amount_threshold(inputs.typical_amount)
@@ -185,18 +224,49 @@ class RiskEngine:
             and payment.amount is not None
             and payment.amount >= unusual_threshold
         ):
+            if trust is None:
+                signals.append(
+                    RiskSignal(
+                        code="UNUSUAL_AMOUNT",
+                        label="Amount is unusually high for a new recipient",
+                        weight=self._weights.unusual_amount,
+                        evidence=(
+                            f"INR {payment.amount:.2f} meets the local-history threshold of "
+                            f"INR {unusual_threshold:.2f}"
+                        ),
+                    )
+                )
+            else:
+                weight = self._trust_scaled_amount_weight(
+                    amount=payment.amount,
+                    unusual_threshold=unusual_threshold,
+                    grade=trust.grade,
+                )
+                signals.append(
+                    RiskSignal(
+                        code="AMOUNT_SCALED_BY_TRUST",
+                        label="Amount risk is scaled by the recipient's network record",
+                        weight=weight,
+                        evidence=(
+                            f"INR {payment.amount:.2f} is high for a new recipient; payee "
+                            f"trust grade {trust.grade.value} scales this contribution."
+                        ),
+                    )
+                )
+
+        if self._has_missing_qr_provenance(payment, inputs.qr_provenance):
             signals.append(
                 RiskSignal(
-                    code="UNUSUAL_AMOUNT",
-                    label="Amount is unusually high for a new recipient",
-                    weight=self._weights.unusual_amount,
+                    code="QR_PROVENANCE_MISSING",
+                    label="Merchant-shaped QR does not include provenance fields",
+                    weight=self._weights.qr_provenance_missing,
                     evidence=(
-                        f"INR {payment.amount:.2f} meets the local-history threshold of "
-                        f"INR {unusual_threshold:.2f}"
+                        "The supplied QR describes a priced merchant payment but does not "
+                        "include a sign or organisation identifier. FinGuard only checks "
+                        "field presence; it cannot validate NPCI signatures."
                     ),
                 )
             )
-
         if payment.transaction_note and SUSPICIOUS_NOTE_PATTERN.search(payment.transaction_note):
             signals.append(
                 RiskSignal(
@@ -231,9 +301,7 @@ class RiskEngine:
             signals.extend(self._context_signals(inputs.context))
 
         if payment.amount is None:
-            corroborated = any(
-                signal.code in CORROBORATING_SIGNAL_CODES for signal in signals
-            )
+            corroborated = any(signal.code in CORROBORATING_SIGNAL_CODES for signal in signals)
             weight = (
                 self._weights.amount_not_specified_corroborated
                 if corroborated
@@ -271,6 +339,43 @@ class RiskEngine:
         historical_threshold = typical_amount * self._thresholds.amount_multiplier
         return max(Decimal(self._thresholds.minimum_unusual_amount), historical_threshold)
 
+    def _trust_scaled_amount_weight(
+        self,
+        *,
+        amount: Decimal,
+        unusual_threshold: Decimal,
+        grade: TrustGrade,
+    ) -> int:
+        """Scale an unusual amount within the named policy ceiling."""
+        ceiling = self._weights.amount_scaled_by_trust
+        severity = TRUST_GRADE_SEVERITY[grade]
+        if severity == 0:
+            return 0
+        amount_scale = min(
+            Decimal(1),
+            amount / (unusual_threshold * AMOUNT_SCALE_SATURATION_MULTIPLIER),
+        )
+        shared_amount_weight = int(
+            (Decimal(ceiling - MAXIMUM_TRUST_GRADE_SEVERITY) * amount_scale).to_integral_value(
+                rounding=ROUND_CEILING
+            )
+        )
+        return min(ceiling, shared_amount_weight + severity)
+
+    @staticmethod
+    def _has_missing_qr_provenance(
+        payment: PaymentDetails,
+        provenance: QrProvenance | None,
+    ) -> bool:
+        """Accept provenance only as a risk-raising client observation."""
+        return (
+            provenance is not None
+            and payment.amount is not None
+            and payment.transaction_reference is not None
+            and not provenance.sign_present
+            and not provenance.orgid_present
+        )
+
     @staticmethod
     def _describe_remote_tools(tools: list[RemoteAccessTool]) -> str:
         names = list(dict.fromkeys(REMOTE_ACCESS_TOOL_LABELS[tool] for tool in tools))
@@ -286,9 +391,7 @@ class RiskEngine:
     def _has_relationship_evidence(self, indicator: FraudIndicator) -> bool:
         return indicator.report_count > 1 or self._relationship_count(indicator) > 0
 
-    def _trust_signals(
-        self, trust: PayeeTrust, *, seeded_match: bool
-    ) -> list[RiskSignal]:
+    def _trust_signals(self, trust: PayeeTrust, *, seeded_match: bool) -> list[RiskSignal]:
         """Turn the payee reputation report into scoring signals.
 
         A thin file deliberately adds nothing: FIRST_TIME_PAYEE already says
@@ -307,9 +410,7 @@ class RiskEngine:
                 )
             )
         elif (
-            not trust.thin_file
-            and not seeded_match
-            and trust.grade in {TrustGrade.C, TrustGrade.D}
+            not trust.thin_file and not seeded_match and trust.grade in {TrustGrade.C, TrustGrade.D}
         ):
             signals.append(
                 RiskSignal(

@@ -99,9 +99,24 @@ class ParsePaymentRequest(StrictModel):
     upi_uri: str = Field(min_length=1, max_length=2_048)
 
 
+class QrProvenance(StrictModel):
+    """Presence-only hints reported from an untrusted UPI QR payload.
+
+    These booleans do not establish who issued a QR or whether any signature is
+    authentic. Keeping only presence prevents opaque QR metadata from crossing
+    the API boundary while still allowing deterministic policy to raise risk.
+    """
+
+    sign_present: StrictBool = False
+    orgid_present: StrictBool = False
+    mode_present: StrictBool = False
+    merchant_category_present: StrictBool = False
+
+
 class ParsePaymentResponse(StrictModel):
     payment: PaymentDetails
     canonical_uri: str
+    qr_provenance: QrProvenance
 
 
 class ContextSignals(StrictModel):
@@ -307,6 +322,7 @@ class RiskScoreRequest(StrictModel):
     context: ContextSignals | None = None
     context_token: ContextToken | None = None
     environment: EnvironmentSignals | None = None
+    qr_provenance: QrProvenance | None = None
 
     @field_validator("device_id")
     @classmethod

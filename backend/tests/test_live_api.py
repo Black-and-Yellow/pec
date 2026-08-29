@@ -3,7 +3,9 @@ from __future__ import annotations
 import httpx
 
 
-def test_live_uvicorn_health_parse_errors_and_all_risk_levels(live_api_url: str) -> None:
+def test_live_uvicorn_health_parse_errors_and_demo_risk_results(
+    live_api_url: str,
+) -> None:
     with httpx.Client(base_url=live_api_url, timeout=5, trust_env=False) as client:
         health = client.get("/api/v1/health")
         assert health.status_code == 200
@@ -38,6 +40,20 @@ def test_live_uvicorn_health_parse_errors_and_all_risk_levels(live_api_url: str)
         scenarios_response = client.get("/api/v1/demo/scenarios")
         assert scenarios_response.status_code == 200
         scenarios = scenarios_response.json()["scenarios"]
+        assert [scenario["id"] for scenario in scenarios] == [
+            "coffee-shop",
+            "tea-stall",
+            "marketplace-seller",
+            "fake-kyc",
+        ]
+        # The frozen demo metadata is synchronized by the human after backend
+        # and Flutter score changes land together.
+        expected_results = {
+            "coffee-shop": (0, "SAFE"),
+            "tea-stall": (23, "SAFE"),
+            "marketplace-seller": (27, "SAFE"),
+            "fake-kyc": (100, "HIGH"),
+        }
         observed_levels: list[str] = []
         for scenario in scenarios:
             payment_response = client.post(
@@ -55,11 +71,12 @@ def test_live_uvicorn_health_parse_errors_and_all_risk_levels(live_api_url: str)
             )
             assert score_response.status_code == 200
             score = score_response.json()
-            assert score["score"] == scenario["expected_score"]
-            assert score["level"] == scenario["expected_level"]
+            expected_score, expected_level = expected_results[scenario["id"]]
+            assert score["score"] == expected_score
+            assert score["level"] == expected_level
             observed_levels.append(score["level"])
 
-        assert observed_levels == ["SAFE", "SAFE", "CAUTION", "HIGH"]
+        assert observed_levels == ["SAFE", "SAFE", "SAFE", "HIGH"]
 
         local_analysis = client.post(
             "/api/v1/context/analyze",

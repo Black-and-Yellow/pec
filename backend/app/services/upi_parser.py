@@ -1,15 +1,27 @@
 from __future__ import annotations
 
 import re
+from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation
 from urllib.parse import parse_qsl, urlsplit
 
 from pydantic import ValidationError
 
-from app.schemas import MAX_PAYMENT_AMOUNT, PaymentDetails
+from app.schemas import MAX_PAYMENT_AMOUNT, PaymentDetails, QrProvenance
 
 AMOUNT_PATTERN = re.compile(r"^\d{1,8}(?:\.\d{1,2})?$")
-SUPPORTED_FIELDS = {"pa", "pn", "am", "tn", "cu", "tr", "tid"}
+OPAQUE_TOKEN_PATTERN = re.compile(r"^[\x21-\x7e]+$")
+MODE_PATTERN = re.compile(r"^\d{1,2}$")
+MERCHANT_CATEGORY_PATTERN = re.compile(r"^\d{4}$")
+PAYMENT_FIELDS = frozenset({"pa", "pn", "am", "tn", "cu", "tr", "tid"})
+PROVENANCE_FIELDS = frozenset({"sign", "orgid", "mode", "mc"})
+SUPPORTED_FIELDS = PAYMENT_FIELDS | PROVENANCE_FIELDS
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class ParsedUpiUri:
+    payment: PaymentDetails
+    qr_provenance: QrProvenance
 
 
 class PaymentParseError(ValueError):
@@ -67,7 +79,33 @@ def _parse_amount(raw_amount: str | None) -> Decimal | None:
     return amount
 
 
-def parse_upi_uri(raw_uri: str) -> PaymentDetails:
+def _validate_provenance_field(key: str, value: str) -> None:
+    """Validate only a field's safe shape; its contents remain untrusted.
+
+    FinGuard does not possess an institutional trust root for these values, so
+    accepting a safe opaque token must never be described as authenticating it.
+    """
+
+    limits = {"sign": 1_024, "orgid": 64, "mode": 2, "mc": 4}
+    if not value or len(value) > limits[key]:
+        raise PaymentParseError(
+            "INVALID_PROVENANCE_FIELD",
+            f"The UPI request contains a malformed '{key}' field",
+        )
+    if key == "mode":
+        well_formed = MODE_PATTERN.fullmatch(value) is not None
+    elif key == "mc":
+        well_formed = MERCHANT_CATEGORY_PATTERN.fullmatch(value) is not None
+    else:
+        well_formed = OPAQUE_TOKEN_PATTERN.fullmatch(value) is not None
+    if not well_formed:
+        raise PaymentParseError(
+            "INVALID_PROVENANCE_FIELD",
+            f"The UPI request contains a malformed '{key}' field",
+        )
+
+
+def parse_upi_uri(raw_uri: str) -> ParsedUpiUri:
     uri = raw_uri.strip()
     if len(uri) > 2_048:
         raise PaymentParseError("URI_TOO_LONG", "UPI URI must be 2,048 characters or fewer")
@@ -90,16 +128,28 @@ def parse_upi_uri(raw_uri: str) -> PaymentDetails:
     if not values.get("pa", "").strip():
         raise PaymentParseError("MISSING_VPA", "The UPI payment request is missing the payee VPA")
 
+    for key in PROVENANCE_FIELDS:
+        if key in values:
+            _validate_provenance_field(key, values[key])
+
     currency = values.get("cu", "INR").strip().upper() or "INR"
     reference = values.get("tr") or values.get("tid")
     try:
-        return PaymentDetails(
-            vpa=values["pa"],
-            payee_name=values.get("pn"),
-            amount=_parse_amount(values.get("am")),
-            transaction_note=values.get("tn"),
-            currency=currency,
-            transaction_reference=reference,
+        return ParsedUpiUri(
+            payment=PaymentDetails(
+                vpa=values["pa"],
+                payee_name=values.get("pn"),
+                amount=_parse_amount(values.get("am")),
+                transaction_note=values.get("tn"),
+                currency=currency,
+                transaction_reference=reference,
+            ),
+            qr_provenance=QrProvenance(
+                sign_present="sign" in values,
+                orgid_present="orgid" in values,
+                mode_present="mode" in values,
+                merchant_category_present="mc" in values,
+            ),
         )
     except ValidationError as exc:
         first_error = exc.errors(include_url=False, include_input=False)[0]

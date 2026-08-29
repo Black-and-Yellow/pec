@@ -35,12 +35,17 @@ def codes(result) -> list[str]:
 
 
 def test_no_environment_reported_leaves_the_score_untouched() -> None:
-    assert assess(None).signals == []
+    result = assess(None)
+    assert codes(result) == ["PAYEE_NAME_UNVERIFIED"]
+    assert result.signals[0].weight == 0
+    assert result.score == 0
 
 
 def test_a_check_with_no_call_adds_nothing() -> None:
     result = assess(EnvironmentSignals(call_activity=CallActivity.NONE))
-    assert result.signals == []
+    assert codes(result) == ["PAYEE_NAME_UNVERIFIED"]
+    assert result.signals[0].weight == 0
+    assert result.score == 0
 
 
 @pytest.mark.parametrize(
@@ -49,7 +54,7 @@ def test_a_check_with_no_call_adds_nothing() -> None:
 )
 def test_an_active_call_of_any_kind_raises_the_score(activity: CallActivity) -> None:
     result = assess(EnvironmentSignals(call_activity=activity))
-    assert codes(result) == ["ACTIVE_CALL_DURING_CHECK"]
+    assert codes(result) == ["ACTIVE_CALL_DURING_CHECK", "PAYEE_NAME_UNVERIFIED"]
     assert result.score == 18
 
 
@@ -60,7 +65,7 @@ def test_an_internet_call_is_named_as_such_in_the_evidence() -> None:
 
 def test_a_ringing_call_is_weighted_far_below_an_answered_one() -> None:
     result = assess(EnvironmentSignals(call_activity=CallActivity.RINGING))
-    assert codes(result) == ["INCOMING_CALL_DURING_CHECK"]
+    assert codes(result) == ["INCOMING_CALL_DURING_CHECK", "PAYEE_NAME_UNVERIFIED"]
     assert result.score == 6
 
 
@@ -75,6 +80,7 @@ def test_a_call_plus_remote_access_escalates_beyond_the_sum_of_its_parts() -> No
         "REMOTE_ACCESS_TOOL_PRESENT",
         "ACTIVE_CALL_DURING_CHECK",
         "SCREEN_SHARE_DURING_CALL",
+        "PAYEE_NAME_UNVERIFIED",
     ]
     # 25 + 18 + 12: the pairing is the digital-arrest setup, so a known payee
     # and a familiar amount still land in the top band.

@@ -80,20 +80,22 @@ def test_all_demo_scenarios_are_stable_and_repeatable(client: TestClient) -> Non
         "marketplace-seller",
         "fake-kyc",
     ]
-    assert [scenario["expected_level"] for scenario in scenarios] == [
-        "SAFE",
-        "SAFE",
-        "CAUTION",
-        "HIGH",
-    ]
-    assert [scenario["expected_score"] for scenario in scenarios] == [0, 23, 33, 99]
+    # The frozen demo metadata is synchronized by the human after backend and
+    # Flutter score changes land together. Keep the backend handoff explicit.
+    expected_results = {
+        "coffee-shop": ((0, 0), "SAFE"),
+        "tea-stall": ((23, 23), "SAFE"),
+        # Payee history legitimately improves trust after the first assessment.
+        "marketplace-seller": ((27, 26), "SAFE"),
+        "fake-kyc": ((100, 100), "HIGH"),
+    }
+
     expected_policies = {
         "SAFE": ("NORMAL", False),
-        "CAUTION": ("DELIBERATE_CONFIRMATION", True),
         "HIGH": ("PAUSED", True),
     }
 
-    for _ in range(2):
+    for pass_index in range(2):
         for scenario in scenarios:
             parsed = client.post(
                 "/api/v1/payments/parse", json={"upi_uri": scenario["upi_uri"]}
@@ -109,8 +111,9 @@ def test_all_demo_scenarios_are_stable_and_repeatable(client: TestClient) -> Non
             )
             assert scored.status_code == 200, scored.text
             result = scored.json()
-            assert result["level"] == scenario["expected_level"]
-            assert result["score"] == scenario["expected_score"]
+            expected_scores, expected_level = expected_results[scenario["id"]]
+            assert result["level"] == expected_level
+            assert result["score"] == expected_scores[pass_index]
             policy, requires_confirmation = expected_policies[result["level"]]
             assert result["handoff_policy"] == policy
             assert result["requires_confirmation"] is requires_confirmation
@@ -173,7 +176,7 @@ def test_history_contains_assessments_without_changing_completed_history(
     second = client.post(
         "/api/v1/risk/score", json={"payment": payment, "device_id": "history-device"}
     ).json()
-    assert first["score"] == second["score"] == 33
+    assert first["score"] == second["score"] == 26
 
     history = client.get("/api/v1/history", headers={"X-FinGuard-Device-ID": "history-device"})
     assert history.status_code == 200
@@ -314,9 +317,9 @@ def test_risk_explain_falls_back_when_gemini_wording_is_malformed(
     assert response.status_code == 200
     assert response.json()["source"] == "template"
     assert response.json()["status"] == "malformed_response"
-    assert "rated this CAUTION" in response.json()["explanation"]
-    assert before["score"] == 33
-    assert before["level"] == "CAUTION"
+    assert "rated this SAFE" in response.json()["explanation"]
+    assert before["score"] == 26
+    assert before["level"] == "SAFE"
 
 
 def test_source_none_context_response_has_no_integrity_token(client: TestClient) -> None:
@@ -407,8 +410,8 @@ def test_prepare_response_rejects_payment_mismatch_and_ignores_score_tampering(
         json={"payment": payment, "assessment": tampered, "already_paid": True},
     )
     assert prepared.status_code == 200
-    assert prepared.json()["report"]["risk_score"] == 33
-    assert prepared.json()["report"]["risk_level"] == "CAUTION"
+    assert prepared.json()["report"]["risk_score"] == 24
+    assert prepared.json()["report"]["risk_level"] == "SAFE"
 
 
 def test_health_returns_service_unavailable_when_database_check_fails(

@@ -12,10 +12,14 @@ class RiskWeights:
     call_with_remote_access: int = 12
     payee_identity_impersonation: int = 20
     payee_trust_low: int = 10
+    payee_name_unverified_informational: int = 0
+    payee_name_unverified_borrowed_brand: int = 14
     first_time_payee: int = 18
     amount_not_specified: int = 5
     amount_not_specified_corroborated: int = 20
     unusual_amount: int = 15
+    amount_scaled_by_trust: int = 20
+    qr_provenance_missing: int = 8
     suspicious_note: int = 10
     identifier_relationship: int = 8
     context_impersonation: int = 8
