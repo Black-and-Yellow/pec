@@ -8,6 +8,7 @@ abstract final class QrImageDecoder {
   // uncompressed image. Keep ordinary phone photos usable while preventing a
   // small compressed file from expanding without a fixed upper bound.
   static const int maximumPixels = 16 * 1024 * 1024;
+  static const int _maximumDecodeDimension = 2048;
 
   static String decode(Uint8List bytes) {
     final image.Decoder? decoder;
@@ -40,27 +41,111 @@ abstract final class QrImageDecoder {
     // invariant before allocating the RGBA and luminance buffers.
     _checkDimensions(decoded.width, decoded.height);
 
-    final image.Image rgba = decoded.convert(numChannels: 4);
+    final image.Image prepared = _prepare(decoded);
+    String? value = _tryDecode(prepared);
+    if (value != null) {
+      return value;
+    }
+
+    // Payment-app QR images are often exported without a full quiet zone.
+    final int shortestSide = prepared.width < prepared.height
+        ? prepared.width
+        : prepared.height;
+    final int padding = (shortestSide ~/ 10).clamp(12, 256);
+    final image.Image padded = image.copyExpandCanvas(
+      prepared,
+      padding: padding,
+      backgroundColor: image.ColorRgb8(255, 255, 255),
+    );
+    value = _tryDecode(padded);
+    if (value != null) {
+      return value;
+    }
+
+    // On fallback only, remove dark strokes from a common centered brand mark
+    // so the QR error-correction layer sees a bounded erasure region.
+    final image.Image withoutCenterBrand = image.Image.from(
+      padded,
+      noAnimation: true,
+    );
+    final int brandSide = (shortestSide * 22) ~/ 100;
+    final int left = (withoutCenterBrand.width - brandSide) ~/ 2;
+    final int top = (withoutCenterBrand.height - brandSide) ~/ 2;
+    image.fillRect(
+      withoutCenterBrand,
+      x1: left,
+      y1: top,
+      x2: left + brandSide - 1,
+      y2: top + brandSide - 1,
+      color: image.ColorRgb8(255, 255, 255),
+    );
+    value = _tryDecode(withoutCenterBrand);
+    if (value != null) {
+      return value;
+    }
+
+    for (final int angle in <int>[90, 180, 270]) {
+      value = _tryDecode(image.copyRotate(withoutCenterBrand, angle: angle));
+      if (value != null) {
+        return value;
+      }
+    }
+
+    throw const FormatException(
+      'No readable QR code was found. Try a sharper image with some space around the code.',
+    );
+  }
+
+  static image.Image _prepare(image.Image decoded) {
+    if (decoded.width <= _maximumDecodeDimension &&
+        decoded.height <= _maximumDecodeDimension) {
+      return image.bakeOrientation(decoded);
+    }
+    if (decoded.width >= decoded.height) {
+      return image.copyResize(decoded, width: _maximumDecodeDimension);
+    }
+    return image.copyResize(decoded, height: _maximumDecodeDimension);
+  }
+
+  static String? _tryDecode(image.Image candidate) {
+    final image.Image rgba = candidate.convert(numChannels: 4);
+    // zxing2 consumes 0xAARRGGBB pixels. BGRA bytes form that value on the
+    // little-endian Web and Android targets.
+    final Uint8List bgra = rgba.getBytes(order: image.ChannelOrder.bgra);
     final RGBLuminanceSource source = RGBLuminanceSource(
       rgba.width,
       rgba.height,
-      rgba.getBytes(order: image.ChannelOrder.rgba).buffer.asInt32List(),
+      bgra.buffer.asInt32List(bgra.offsetInBytes, rgba.width * rgba.height),
     );
-    final BinaryBitmap bitmap = BinaryBitmap(HybridBinarizer(source));
-    try {
-      final Result result = QRCodeReader().decode(bitmap);
-      final String value = result.text.trim();
-      if (value.isEmpty) {
-        throw const FormatException(
-          'No readable QR code was found in that image.',
+    final DecodeHints harder = DecodeHints()
+      ..put<void>(DecodeHintType.tryHarder);
+    final DecodeHints pure = DecodeHints()
+      ..put<void>(DecodeHintType.pureBarcode);
+    final List<({Binarizer binarizer, DecodeHints hints})> attempts =
+        <({Binarizer binarizer, DecodeHints hints})>[
+          (binarizer: HybridBinarizer(source), hints: harder),
+          (binarizer: HybridBinarizer(source), hints: pure),
+          (binarizer: GlobalHistogramBinarizer(source), hints: harder),
+          (
+            binarizer: HybridBinarizer(InvertedLuminanceSource(source)),
+            hints: harder,
+          ),
+        ];
+    for (final attempt in attempts) {
+      try {
+        final Result result = QRCodeReader().decode(
+          BinaryBitmap(attempt.binarizer),
+          hints: attempt.hints,
         );
+        final String value = result.text.trim();
+        if (value.isNotEmpty) {
+          return value;
+        }
+      } on ReaderException {
+        // Try the next bounded preprocessing strategy.
       }
-      return value;
-    } on ReaderException {
-      throw const FormatException(
-        'No readable QR code was found. Try a sharper, tightly cropped image.',
-      );
     }
+    return null;
   }
 
   static void _checkDimensions(int width, int height) {

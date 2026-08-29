@@ -147,6 +147,20 @@ Updated: 2026-08-14
 - Fix: added `http://127.0.0.1:8080` to the example and ignored local `ALLOWED_ORIGINS`, restarted Uvicorn, and served a fresh release Web build on the documented URL. No scoring, AI authority, payment, authentication, or external-action behavior changed.
 - Validation: the capability response returned `access-control-allow-origin: http://127.0.0.1:8080`; `flutter build web --release --no-pub --dart-define=API_BASE_URL=http://127.0.0.1:8000/` completed in 81.4s with a successful Wasm dry run; isolated Chrome reached the visible `Start with FinGuard` group with no console warnings/errors, page errors, or failed requests. Screenshot: `tmp/web-fixed.png`.
 
+## Web/APK shared UI refresh evidence (2026-08-29)
+
+- Refreshed the shared Flutter theme, welcome, home, scanner, paste, suspicious-message context, risk-result, and shared-component surfaces for a more cohesive Web presentation. The same shared Flutter code targets Web and APK, but APK build/runtime work is deferred per the user's request.
+- Existing behavior and widget keys remain intact. Backend deterministic policy remains the only score/verdict authority, and all explicit confirmations before UPI handoff or other external actions are unchanged.
+- Focused implementation tests passed 18/18; focused accessibility tests passed 13/13; the final focused parent regression passed 29/29; the final parent full-suite validation passed 87/87; and Flutter analysis reported no issues.
+- The release Web build with `API_BASE_URL=http://127.0.0.1:8000` succeeded, including the Wasm dry run. HTTP checks returned 200 for both API and Web, and persistent localhost listeners on ports 8000 and 8080 were left running for the requested demo.
+- Independent read-only review found no P0 issue. Its three P1 findings were corrected before final validation. A presenter-ready 2-3 minute walkthrough is recorded in `DEMO_SCRIPT.md`.
+
+## QR image upload repair evidence (2026-08-29)
+
+- Root cause: the supplied branded QR had a very small quiet zone and a large center logo, while the Web fallback used one Hybrid decode attempt and supplied RGBA-packed words to ZXing's ARGB pixel boundary.
+- Fix: `frontend/lib/services/qr_image_decoder.dart` now uses correct pixel packing plus bounded quiet-zone, binarization, inversion, center-logo, and right-angle fallback attempts; `frontend/test/qr_image_decoder_test.dart` adds a synthetic branded/low-quiet-zone regression. The scanner's strict `Payment.validateUpiUri` check remains unchanged before navigation, and the exact user QR payload was neither logged nor committed.
+- Validation: the single focused decoder command passed 5/5 tests. The release Web rebuild with `API_BASE_URL=http://127.0.0.1:8000` succeeded, including the Wasm dry run; independent review found no P0/P1 issue. The requested API and Web listeners remain running on localhost ports 8000 and 8080.
+
 - **blocked external:** revoke/rotate the exposed provider credentials without reproducing them in tickets or logs.
 - **blocked external:** production Android signing requires an operator-controlled private keystore and credentials; none will be generated or stored by this task.
 - **deferred:** PostgreSQL/shared persistence until the application moves beyond its documented single-node boundary.
