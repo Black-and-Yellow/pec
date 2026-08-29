@@ -1000,25 +1000,34 @@ class _ActionPanel extends StatelessWidget {
             ),
             const SizedBox(height: 18),
             if (!paymentHandoffEnabled)
-              Container(
-                key: const Key('payment_handoff_unavailable'),
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: AppColors.surfaceMuted,
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: AppColors.border),
-                ),
-                child: const Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: <Widget>[
-                    Icon(Icons.lock_outline, size: 20),
-                    SizedBox(width: 10),
-                    Expanded(
-                      child: Text(
-                        'This result is view-only. No UPI app can be opened from it.',
+              Semantics(
+                // Announced as one notice: the padlock and the sentence are a
+                // single fact, and reading them as separate nodes buries the
+                // one thing this panel exists to say.
+                container: true,
+                explicitChildNodes: true,
+                label:
+                    'This result is view-only. No UPI app can be opened from it.',
+                child: Container(
+                  key: const Key('payment_handoff_unavailable'),
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: AppColors.surfaceMuted,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: AppColors.border),
+                  ),
+                  child: const Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      Icon(Icons.lock_outline, size: 20),
+                      SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          'This result is view-only. No UPI app can be opened from it.',
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               )
             else if (safe)
@@ -1249,7 +1258,6 @@ class _VerificationCheckbox extends StatelessWidget {
   );
 }
 
-
 /// Tells the user where to look next, rather than passing a verdict.
 ///
 /// The name in a UPI request is set by whoever generated it. FinGuard cannot
@@ -1303,9 +1311,9 @@ class _PayeeNameClaimCard extends StatelessWidget {
                   ],
                 ),
                 key: const Key('payee_name_unverified_claim'),
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  height: 1.5,
-                ),
+                style: Theme.of(
+                  context,
+                ).textTheme.bodyMedium?.copyWith(height: 1.5),
               ),
               const SizedBox(height: 10),
               Text(

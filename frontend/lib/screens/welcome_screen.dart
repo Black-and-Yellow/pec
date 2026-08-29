@@ -150,101 +150,108 @@ class _WelcomeActions extends StatelessWidget {
   final AuthController auth;
 
   @override
-  Widget build(BuildContext context) => Container(
-    decoration: BoxDecoration(
-      color: AppColors.teal,
-      borderRadius: BorderRadius.circular(28),
-    ),
-    child: Padding(
-      padding: const EdgeInsets.all(28),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        mainAxisSize: MainAxisSize.min,
-        children: <Widget>[
-          Text(
-            'Start with FinGuard',
-            style: Theme.of(context).textTheme.titleLarge,
-          ),
-          const SizedBox(height: 7),
-          Text(
-            'Create an account for a persistent identity, or continue privately for a one-device safety check.',
-            style: Theme.of(
-              context,
-            ).textTheme.bodyMedium?.copyWith(color: AppColors.inkMuted),
-          ),
-          if (auth.error != null) ...<Widget>[
-            const SizedBox(height: 16),
-            ErrorNotice(
-              message: auth.error!,
-              onRetry: auth.canRetrySessionRestore
-                  ? () => auth.initialize()
-                  : auth.clearError,
+  Widget build(BuildContext context) => Semantics(
+    // A named region, so a screen reader announces the sign-in choices as one
+    // labelled group rather than as loose buttons after the introduction.
+    container: true,
+    explicitChildNodes: true,
+    label: 'Start with FinGuard',
+    child: Container(
+      decoration: BoxDecoration(
+        color: AppColors.teal,
+        borderRadius: BorderRadius.circular(28),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(28),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            Text(
+              'Start with FinGuard',
+              style: Theme.of(context).textTheme.titleLarge,
             ),
-          ],
-          const SizedBox(height: 22),
-          FilledButton(
-            key: const Key('create_account_button'),
-            style: FilledButton.styleFrom(
-              backgroundColor: AppColors.chrome,
-              foregroundColor: Colors.white,
+            const SizedBox(height: 7),
+            Text(
+              'Create an account for a persistent identity, or continue privately for a one-device safety check.',
+              style: Theme.of(
+                context,
+              ).textTheme.bodyMedium?.copyWith(color: AppColors.inkMuted),
             ),
-            onPressed: auth.busy
-                ? null
-                : () => _openForm(context, AuthFormMode.register),
-            child: const Text('Create account'),
-          ),
-          const SizedBox(height: 10),
-          OutlinedButton(
-            key: const Key('sign_in_button'),
-            style: OutlinedButton.styleFrom(
-              foregroundColor: AppColors.ink,
-              side: const BorderSide(color: AppColors.ink, width: 1.5),
-            ),
-            onPressed: auth.busy
-                ? null
-                : () => _openForm(context, AuthFormMode.login),
-            child: const Text('Sign in'),
-          ),
-          if (auth.googleEnabled) ...<Widget>[
-            const Padding(
-              padding: EdgeInsets.symmetric(vertical: 15),
-              child: Row(
-                children: <Widget>[
-                  Expanded(child: Divider()),
-                  Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 10),
-                    child: Text('OR'),
-                  ),
-                  Expanded(child: Divider()),
-                ],
+            if (auth.error != null) ...<Widget>[
+              const SizedBox(height: 16),
+              ErrorNotice(
+                message: auth.error!,
+                onRetry: auth.canRetrySessionRestore
+                    ? () => auth.initialize()
+                    : auth.clearError,
               ),
+            ],
+            const SizedBox(height: 22),
+            FilledButton(
+              key: const Key('create_account_button'),
+              style: FilledButton.styleFrom(
+                backgroundColor: AppColors.chrome,
+                foregroundColor: Colors.white,
+              ),
+              onPressed: auth.busy
+                  ? null
+                  : () => _openForm(context, AuthFormMode.register),
+              child: const Text('Create account'),
             ),
-            if (Theme.of(context).platform == TargetPlatform.android)
-              OutlinedButton.icon(
-                key: const Key('google_sign_in_button'),
-                onPressed: auth.busy ? null : auth.signInWithGoogle,
-                icon: const Icon(Icons.account_circle_outlined),
-                label: const Text('Continue with Google'),
-              )
-            else
-              Center(child: buildGoogleWebButton()),
+            const SizedBox(height: 10),
+            OutlinedButton(
+              key: const Key('sign_in_button'),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: AppColors.ink,
+                side: const BorderSide(color: AppColors.ink, width: 1.5),
+              ),
+              onPressed: auth.busy
+                  ? null
+                  : () => _openForm(context, AuthFormMode.login),
+              child: const Text('Sign in'),
+            ),
+            if (auth.googleEnabled) ...<Widget>[
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 15),
+                child: Row(
+                  children: <Widget>[
+                    Expanded(child: Divider()),
+                    Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 10),
+                      child: Text('OR'),
+                    ),
+                    Expanded(child: Divider()),
+                  ],
+                ),
+              ),
+              if (Theme.of(context).platform == TargetPlatform.android)
+                OutlinedButton.icon(
+                  key: const Key('google_sign_in_button'),
+                  onPressed: auth.busy ? null : auth.signInWithGoogle,
+                  icon: const Icon(Icons.account_circle_outlined),
+                  label: const Text('Continue with Google'),
+                )
+              else
+                Center(child: buildGoogleWebButton()),
+            ],
+            const SizedBox(height: 10),
+            TextButton(
+              key: const Key('continue_guest_button'),
+              style: TextButton.styleFrom(foregroundColor: AppColors.ink),
+              onPressed: auth.busy ? null : auth.continueAsGuest,
+              child: const Text('Continue privately without an account'),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'Guest mode keeps the useful assessment list on this device. It does not weaken payment checks.',
+              textAlign: TextAlign.center,
+              style: Theme.of(
+                context,
+              ).textTheme.bodySmall?.copyWith(color: AppColors.inkMuted),
+            ),
           ],
-          const SizedBox(height: 10),
-          TextButton(
-            key: const Key('continue_guest_button'),
-            style: TextButton.styleFrom(foregroundColor: AppColors.ink),
-            onPressed: auth.busy ? null : auth.continueAsGuest,
-            child: const Text('Continue privately without an account'),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            'Guest mode keeps the useful assessment list on this device. It does not weaken payment checks.',
-            textAlign: TextAlign.center,
-            style: Theme.of(
-              context,
-            ).textTheme.bodySmall?.copyWith(color: AppColors.inkMuted),
-          ),
-        ],
+        ),
       ),
     ),
   );

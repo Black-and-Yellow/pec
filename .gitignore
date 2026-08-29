@@ -56,3 +56,10 @@ Thumbs.db
 # Local verification artifacts
 tmp/
 .tools/
+
+# Toolchain archives and part-downloads that land in the working tree.
+# The Flutter SDK zip is ~1.9 GB and would be rejected by the remote anyway.
+*.crdownload
+flutter_windows_*.zip
+flutter_linux_*.tar.xz
+flutter_macos_*.zip

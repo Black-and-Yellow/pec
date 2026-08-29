@@ -3,8 +3,8 @@
   "short_name": "FinGuard",
   "start_url": ".",
   "display": "standalone",
-  "background_color": "#FBF8F2",
-  "theme_color": "#0B5C57",
+  "background_color": "#F4F6F1",
+  "theme_color": "#101A15",
   "description": "Pre-payment QR and UPI-link safety layer.",
   "prefer_related_applications": false
 }

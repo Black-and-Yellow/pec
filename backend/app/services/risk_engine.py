@@ -387,12 +387,24 @@ class RiskEngine:
             Decimal(1),
             amount / (unusual_threshold * AMOUNT_SCALE_SATURATION_MULTIPLIER),
         )
-        shared_amount_weight = int(
-            (Decimal(ceiling - MAXIMUM_TRUST_GRADE_SEVERITY) * amount_scale).to_integral_value(
-                rounding=ROUND_CEILING
-            )
+        # The flat UNUSUAL_AMOUNT weight is the baseline for a payee nobody can
+        # vouch for, and trust discounts it from there. Deriving it the other
+        # way round - building up from zero - made the scaling weaker than the
+        # signal it replaced, so INR 4,500 to an address nobody had ever seen
+        # scored below the flat weight and came out SAFE. A grade that only
+        # means "no track record" is not a reason to worry less.
+        #
+        # The discount is proportional rather than a step at one grade. A step
+        # let a single observation nudge a payee across a boundary and flip the
+        # same payment from CAUTION to SAFE between two checks; a proportional
+        # discount moves it by one band's worth instead.
+        severity_fraction = Decimal(severity) / Decimal(MAXIMUM_TRUST_GRADE_SEVERITY)
+        baseline = Decimal(self._weights.unusual_amount) * severity_fraction
+        escalation = Decimal(ceiling - self._weights.unusual_amount) * amount_scale
+        return min(
+            ceiling,
+            int((baseline + escalation).to_integral_value(rounding=ROUND_CEILING)),
         )
-        return min(ceiling, shared_amount_weight + severity)
 
     @staticmethod
     def _has_missing_qr_provenance(

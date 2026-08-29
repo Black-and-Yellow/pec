@@ -187,3 +187,31 @@ class TestTrustScore:
     )
     def test_scoring_never_raises_for_any_shape_of_address(self, vpa: str) -> None:
         assert score(vpa) is not None
+
+
+def test_a_concerning_address_never_shows_a_strong_identity_pillar() -> None:
+    """The bar must agree with the sentence printed beside it.
+
+    Three of the four identity checks pass for almost any address, so one
+    serious failure still leaves a ratio inside the strong band. A pretext
+    address scored 22 of 30 and drew a healthy green bar directly above the
+    text explaining why the address was suspect.
+    """
+    from app.repositories.reputation_repository import unknown_snapshot
+    from app.schemas import TrustPillarCode, TrustPillarStatus
+    from app.services.trust_score import TrustInputs, TrustScorer
+
+    scorer = TrustScorer()
+
+    def identity_status(vpa: str) -> TrustPillarStatus:
+        report = scorer.score(TrustInputs(vpa=vpa, reputation=unknown_snapshot(vpa)))
+        pillar = next(p for p in report.pillars if p.code is TrustPillarCode.IDENTITY)
+        return pillar.status
+
+    assert identity_status("kyc-verify-now@ybl") is not TrustPillarStatus.STRONG
+    assert identity_status("9876543210@ybl") is not TrustPillarStatus.STRONG
+    # Impersonation is the most serious structural finding, so it reads weak
+    # rather than merely unremarkable.
+    assert identity_status("sbi-refund@okaxis") is TrustPillarStatus.WEAK
+    # A clean address is still allowed to look clean.
+    assert identity_status("anita.tailors@ybl") is TrustPillarStatus.STRONG

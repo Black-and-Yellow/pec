@@ -49,7 +49,7 @@ async function openAsGuest(page: Page): Promise<void> {
   await enableAccessibility(page);
   await expect(page.getByRole('group', { name: /^Start with FinGuard/ })).toBeVisible();
   await page.getByRole('button', { name: 'Continue privately without an account' }).click();
-  await expect(page.getByText('Reliable demo cases')).toBeVisible();
+  await expect(page.getByText('Try with demo data')).toBeVisible();
 }
 
 async function openPaste(page: Page): Promise<void> {
@@ -119,6 +119,9 @@ const riskCases = [
 
 for (const riskCase of riskCases) {
   test(`${riskCase.name} live assessment remains behind cancelled handoff`, async ({ page }) => {
+    // A high-risk result sits behind a trust-scaled cool-off of up to twenty
+    // seconds, which does not fit the default budget alongside page start-up.
+    test.setTimeout(riskCase.level === 'HIGH RISK' ? 120_000 : 45_000);
     const diagnostics = observe(page);
     await openAsGuest(page);
     await openPaste(page);
@@ -136,19 +139,26 @@ for (const riskCase of riskCases) {
     const handoff = page.getByRole('button', { name: riskCase.action });
     if (riskCase.requiresVerification) {
       await expect(handoff).toBeDisabled();
+      // click(), not check(): Flutter rebuilds the semantics node when the
+      // box toggles, so check() re-reads aria-checked on an element that no
+      // longer exists and reports no state change even though the box ticked.
+      // The counter below is the real assertion that all three registered.
       await page.getByRole('checkbox', {
         name: 'I checked the recipient VPA using a source I trust.',
-      }).check();
+      }).click();
       await page.getByRole('checkbox', {
         name: 'I reviewed the amount and currency.',
-      }).check();
+      }).click();
       await page.getByRole('checkbox', {
         name: /I ignored urgency and contact instructions/,
-      }).check();
+      }).click();
+      await expect(page.getByText('Verification complete').first()).toBeVisible();
       if (riskCase.level === 'HIGH RISK') {
         await expect(page.getByText(/this pause is deliberate/i)).toBeVisible();
         await expect(handoff).toBeDisabled();
-        await expect(handoff).toBeEnabled({ timeout: 15_000 });
+        // The pause is scaled by payee trust, and this fixture grades D, which
+        // earns the longest one. The wait has to outlast it by a clear margin.
+        await expect(handoff).toBeEnabled({ timeout: 40_000 });
       } else {
         await expect(handoff).toBeEnabled();
       }
@@ -244,7 +254,7 @@ test('responsive home layouts fit 375, 768 and 1440 pixels', async ({ page }) =>
   await openAsGuest(page);
   for (const width of [375, 768, 1440]) {
     await page.setViewportSize({ width, height: width === 375 ? 812 : 900 });
-    await expect(page.getByText('Check a payment request', { exact: true })).toBeVisible();
+    await expect(page.getByText('Know what you are paying.', { exact: true })).toBeVisible();
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth - innerWidth);
     expect(overflow).toBeLessThanOrEqual(1);
     await page.screenshot({

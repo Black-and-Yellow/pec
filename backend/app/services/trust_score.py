@@ -208,12 +208,23 @@ class TrustScorer:
             if concerns
             else "The address structure raised none of the checks FinGuard applies to it."
         )
+        # An address raising a concern must never read as strong. Three of the
+        # four identity checks pass for almost any address, so a single serious
+        # failure still leaves a ratio in the strong band: a pretext address
+        # scored 22 of 30 and rendered a healthy green bar directly above the
+        # sentence explaining why the address is suspect. The status has to
+        # agree with the evidence printed beside it.
+        status = _status(identity.points, identity.maximum)
+        if identity.is_impersonation:
+            status = TrustPillarStatus.WEAK
+        elif concerns and status is TrustPillarStatus.STRONG:
+            status = TrustPillarStatus.NEUTRAL
         return TrustPillar(
             code=TrustPillarCode.IDENTITY,
             label="Address identity",
             points=identity.points,
             maximum=identity.maximum,
-            status=_status(identity.points, identity.maximum),
+            status=status,
             evidence=evidence[:400],
         )
 

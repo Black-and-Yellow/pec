@@ -74,7 +74,12 @@ void main() {
       'verify_amount_checkbox',
       'verify_independent_contact_checkbox',
     ]) {
-      await tester.tap(find.byKey(Key(key)));
+      // The checklist sits below the fold on the 800x600 test surface, so a
+      // bare tap silently misses and the pause never starts.
+      final Finder box = find.byKey(Key(key));
+      await tester.ensureVisible(box);
+      await tester.pumpAndSettle();
+      await tester.tap(box);
       await tester.pump();
     }
   }
@@ -223,9 +228,12 @@ void main() {
       await tester.pump(const Duration(seconds: 5));
       expect(find.text('Continue anyway (10s)'), findsOneWidget);
 
-      await tester.tap(find.byKey(const Key('verify_amount_checkbox')));
+      final Finder amountBox = find.byKey(const Key('verify_amount_checkbox'));
+      await tester.ensureVisible(amountBox);
+      await tester.pumpAndSettle();
+      await tester.tap(amountBox);
       await tester.pump();
-      await tester.tap(find.byKey(const Key('verify_amount_checkbox')));
+      await tester.tap(amountBox);
       await tester.pump();
 
       expect(find.text('Continue anyway (15s)'), findsOneWidget);

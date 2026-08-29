@@ -78,37 +78,45 @@ class TrustReportCard extends StatelessWidget {
             padding: const EdgeInsets.fromLTRB(16, 14, 16, 4),
             child: _LedgerSummary(trust: trust),
           ),
-          Theme(
-            data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
-            child: ExpansionTile(
-              key: const Key('payee_trust_pillars_toggle'),
-              initiallyExpanded: initiallyExpanded,
-              tilePadding: const EdgeInsets.symmetric(horizontal: 16),
-              childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-              title: Text(
-                'How this grade was built',
-                style: Theme.of(context).textTheme.titleSmall,
-              ),
-              subtitle: Text(
-                '${trust.pillars.where((TrustPillar p) => p.hasData).length} of '
-                '${trust.pillars.length} factors could be assessed',
-                style: Theme.of(
-                  context,
-                ).textTheme.bodySmall?.copyWith(color: AppColors.inkMuted),
-              ),
-              children: <Widget>[
-                for (final TrustPillar pillar in trust.pillars)
-                  _PillarRow(pillar: pillar),
-                const SizedBox(height: 6),
-                Text(
-                  trust.disclaimer,
-                  key: const Key('payee_trust_disclaimer'),
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: AppColors.inkMuted,
-                    height: 1.5,
-                  ),
+          // The tile needs a Material of its own to paint on. Without it the
+          // card's own background sits in front of the ink splash, so tapping
+          // the header does nothing visible and the control feels broken.
+          Material(
+            type: MaterialType.transparency,
+            child: Theme(
+              data: Theme.of(
+                context,
+              ).copyWith(dividerColor: Colors.transparent),
+              child: ExpansionTile(
+                key: const Key('payee_trust_pillars_toggle'),
+                initiallyExpanded: initiallyExpanded,
+                tilePadding: const EdgeInsets.symmetric(horizontal: 16),
+                childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                title: Text(
+                  'How this grade was built',
+                  style: Theme.of(context).textTheme.titleSmall,
                 ),
-              ],
+                subtitle: Text(
+                  '${trust.pillars.where((TrustPillar p) => p.hasData).length} of '
+                  '${trust.pillars.length} factors could be assessed',
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodySmall?.copyWith(color: AppColors.inkMuted),
+                ),
+                children: <Widget>[
+                  for (final TrustPillar pillar in trust.pillars)
+                    _PillarRow(pillar: pillar),
+                  const SizedBox(height: 6),
+                  Text(
+                    trust.disclaimer,
+                    key: const Key('payee_trust_disclaimer'),
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: AppColors.inkMuted,
+                      height: 1.5,
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ],
@@ -176,7 +184,9 @@ class _LedgerSummary extends StatelessWidget {
     children: <Widget>[
       _Fact(
         label: 'KNOWN FOR',
-        value: trust.checkCount == 0 ? 'never seen' : _duration(trust.observedDays),
+        value: trust.checkCount == 0
+            ? 'never seen'
+            : _duration(trust.observedDays),
       ),
       _Fact(
         label: 'PAYERS',
@@ -277,7 +287,9 @@ class _PillarRow extends StatelessWidget {
                 hasData ? '${pillar.points}/${pillar.maximum}' : 'no data',
                 style: Theme.of(context).textTheme.labelMedium?.copyWith(
                   color: hasData ? AppColors.ink : AppColors.inkMuted,
-                  fontFeatures: const <FontFeature>[FontFeature.tabularFigures()],
+                  fontFeatures: const <FontFeature>[
+                    FontFeature.tabularFigures(),
+                  ],
                 ),
               ),
             ],
@@ -295,9 +307,10 @@ class _PillarRow extends StatelessWidget {
           const SizedBox(height: 6),
           Text(
             pillar.evidence,
-            style: Theme.of(
-              context,
-            ).textTheme.bodySmall?.copyWith(color: AppColors.inkMuted, height: 1.45),
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: AppColors.inkMuted,
+              height: 1.45,
+            ),
           ),
         ],
       ),
@@ -383,9 +396,10 @@ class _SuspectRegistryCardState extends State<SuspectRegistryCard> {
           'India\u2019s cybercrime portal keeps the official record of UPI IDs '
           'reported by banks and victims. FinGuard cannot read that list, so '
           'this copies the ID and opens the official search for you.',
-          style: Theme.of(
-            context,
-          ).textTheme.bodyMedium?.copyWith(color: AppColors.inkMuted, height: 1.5),
+          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+            color: AppColors.inkMuted,
+            height: 1.5,
+          ),
         ),
         const SizedBox(height: 14),
         SizedBox(
@@ -412,7 +426,9 @@ class _SuspectRegistryCardState extends State<SuspectRegistryCard> {
         return;
       }
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('${widget.vpa} copied. Paste it into the search.')),
+        SnackBar(
+          content: Text('${widget.vpa} copied. Paste it into the search.'),
+        ),
       );
     } on Object catch (error) {
       if (!mounted) {

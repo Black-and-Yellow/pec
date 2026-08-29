@@ -101,23 +101,6 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Copy incident draft?'), findsNothing);
-    expect(actions.copiedText, isNotNull);
-    expect(find.text('Copied'), findsOneWidget);
-  });
-
-  testWidgets('confirming clipboard access copies the incident report', (
-    WidgetTester tester,
-  ) async {
-    final FakeExternalActions actions = FakeExternalActions();
-    await pumpIncidentScreen(tester, actions);
-
-    await tester.tap(find.byKey(const Key('copy_report_button')));
-    await tester.pumpAndSettle();
-    expect(actions.copiedText, isNull);
-
-    await tester.tap(find.text('Copy to clipboard'));
-    await tester.pumpAndSettle();
-
     expect(actions.copiedText, report);
     expect(find.text('Copied'), findsOneWidget);
     expect(find.text('Incident draft copied.'), findsOneWidget);
