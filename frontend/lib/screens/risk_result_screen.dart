@@ -53,14 +53,27 @@ class _RiskResultScreenState extends State<RiskResultScreen> {
   /// fixed pause rather than inheriting a grade they never earned.
   static const int _unratedCoolOffSeconds = 10;
 
+  /// The shortest pause any high-risk result may impose.
+  ///
+  /// The pause exists only for HIGH verdicts, so letting a good grade drive it
+  /// to zero would switch the safeguard off in the case that needs it most: a
+  /// trusted merchant whose QR was swapped, or a payer being talked into
+  /// sending money to an ordinary-looking account. A well-regarded payee and a
+  /// dangerous payment are different claims, and reputation cannot answer the
+  /// second one.
+  static const int _minimumCoolOffSeconds = 5;
+
   /// How long the deliberate pause lasts, scaled by what the network knows
   /// about the recipient.
   ///
   /// A stranger earns a longer stop than an address hundreds of payers have
   /// used without incident. Scammers rely on speed, so the less FinGuard can
-  /// say about who is being paid, the more deliberate the last step becomes.
+  /// say about who is being paid, the more deliberate the last step becomes —
+  /// but never less than [_minimumCoolOffSeconds], because the verdict that
+  /// triggered this pause was reached on evidence the payee's record does not
+  /// override.
   int get _coolOffSeconds => switch (widget.payeeTrust?.grade) {
-    TrustGrade.aPlus || TrustGrade.a => 0,
+    TrustGrade.aPlus || TrustGrade.a => _minimumCoolOffSeconds,
     TrustGrade.b => 5,
     TrustGrade.isNew => 10,
     TrustGrade.c => 15,

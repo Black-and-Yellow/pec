@@ -80,7 +80,7 @@ void main() {
   }
 
   group('cool-off scales with what the network knows about the payee', () {
-    testWidgets('a well-established payee imposes no pause at all', (
+    testWidgets('a well-established payee still cannot skip the pause', (
       WidgetTester tester,
     ) async {
       await pumpResult(
@@ -97,12 +97,68 @@ void main() {
       );
       await completeVerification(tester);
 
-      final Finder continueButton = find.byKey(
-        const Key('continue_anyway_button'),
+      // The best possible grade earns the shortest pause, never none. A HIGH
+      // verdict was reached on evidence the payee's record does not override:
+      // a trusted merchant's QR can be swapped, and a payer can be talked into
+      // paying an ordinary-looking account.
+      expect(find.text('Continue anyway (5s)'), findsOneWidget);
+      expect(
+        tester
+            .widget<TextButton>(find.byKey(const Key('continue_anyway_button')))
+            .onPressed,
+        isNull,
       );
-      expect(tester.widget<TextButton>(continueButton).onPressed, isNotNull);
+
+      await tester.pump(const Duration(seconds: 5));
       expect(find.text('Continue anyway'), findsOneWidget);
-      expect(find.byKey(const Key('cool_off_notice')), findsNothing);
+      expect(
+        tester
+            .widget<TextButton>(find.byKey(const Key('continue_anyway_button')))
+            .onPressed,
+        isNotNull,
+      );
+    });
+
+    testWidgets('no grade can drive the pause below the floor', (
+      WidgetTester tester,
+    ) async {
+      for (final String grade in const <String>['A_PLUS', 'A', 'B', 'C', 'D']) {
+        // Unmount first: the same widget type at the same tree position keeps
+        // its State, so initState would not re-run and the pause would carry
+        // over from the previous grade.
+        await tester.pumpWidget(const MaterialApp(home: SizedBox.shrink()));
+        await pumpResult(
+          tester,
+          assessment: _highRisk(),
+          trust: PayeeTrust.fromApiJson(
+            payeeTrustJson(
+              vpa: 'merchant@upi',
+              grade: grade,
+              score: 50,
+              thinFile: false,
+            ),
+          ),
+        );
+        await completeVerification(tester);
+
+        expect(
+          find.text('Continue anyway'),
+          findsNothing,
+          reason: 'grade $grade must still impose some pause',
+        );
+        expect(
+          tester
+              .widget<TextButton>(
+                find.byKey(const Key('continue_anyway_button')),
+              )
+              .onPressed,
+          isNull,
+          reason: 'grade $grade must gate the button before the pause elapses',
+        );
+
+        // Let the timer finish so it does not outlive this iteration.
+        await tester.pump(const Duration(seconds: 20));
+      }
     });
 
     testWidgets('the bottom trust band imposes the longest pause', (
