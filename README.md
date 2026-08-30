@@ -22,13 +22,64 @@ SCAN OR PASTE -> SCORE EXPLAINABLY -> RESPOND WITH USER CONFIRMATION
 - SAFE, CAUTION, and HIGH RISK paths with deliberate confirmation before risky handoff.
 - A guided 90-second offline Risk Lab with an outcome spectrum for comparing four deterministic judge cases, including a legitimate open-amount static QR, without API, AI, or payment-app access.
 - A three-step independent-verification checklist before any live CAUTION or HIGH RISK handoff can continue.
-- A ten-second cooling-off pause before a live HIGH RISK handoff can continue after its checklist.
+- A cooling-off pause before a live HIGH RISK handoff can continue after its checklist, scaled by the payee's trust grade and never shorter than five seconds.
 - An on-device trusted contact and Android text/plain share-target intake for messages or UPI requests.
 - An immediate deterministic plain-language score summary with optional, separately labelled, consent-gated Gemini wording that cannot alter or replace the assessment summary.
 - Protective actions, an "already paid" recovery flow, incident draft copy, the official Indian cybercrime route, and native trusted-contact sharing.
 - Optional Gemini text/image context extraction with explicit consent, strict structured output, and local-rule fallback.
+- An identifier checker that takes a `upi://pay` link, a bare UPI ID, or an Indian mobile number, works out which it is, and reports what FinGuard has observed. A mobile number is expanded into the phone-shaped UPI addresses it could correspond to; FinGuard cannot identify a number's owner or the account behind it.
+- A payee trust report built from address structure plus FinGuard's own check history, with a provenance label on every pillar (read on this device, FinGuard checks, user-reported, seeded demo).
+- Collection-account pattern detection, reported as check-pattern evidence rather than transaction evidence. It complements bank-side systems such as RBIH MuleHunter; it does not replicate them and has no access to transaction data.
+- An Intent Shield: an optional pre-analysis question about what the user expects, compared against what the request actually does. It never contributes to the risk score.
+- A published, versioned Policy Card at `GET /api/v1/policy/card` giving every weight, its plain-language reason, its source category, the band boundaries, and the limitations. The app renders it and never keeps its own copy of the weights.
 - Anonymous local check history and clearly labelled seeded demo history/reputation data.
 - Backend tests, Flutter tests, CI, and a native low-memory OCI deployment using Nginx, systemd, and Let's Encrypt.
+
+## What FinGuard is, and is not
+
+FinGuard is a consumer-side pre-authorization safety layer. It reads a payment
+request before a UPI app is opened, explains what it can see, and asks the
+person to confirm. It sits beside bank-side systems rather than duplicating
+them: institutions such as RBIH MuleHunter act on transaction data FinGuard has
+no access to, and the two see different things about the same fraud.
+
+It does not have, and never claims:
+
+- Any connection to a bank, NPCI, or a government reporting system.
+- The ability to block, reverse, freeze, or report a transaction.
+- Visibility of any payment. Reputation counts *safety checks* run by FinGuard
+  users, not money moving.
+- Identification of a phone number's owner or the account behind it.
+- A statistically trained fraud model. Scores are deterministic intervention
+  values, not probabilities. See `GET /api/v1/policy/card`.
+
+Where the app links to the national cybercrime portal, it copies the address
+and opens the official page. It never submits anything on the user's behalf.
+
+### Data provenance
+
+Every piece of evidence is labelled with where it came from:
+
+| Label | Meaning |
+|---|---|
+| Read on this device | Computed from the request itself; no lookup, reproducible offline |
+| FinGuard checks | Counted from safety checks run by FinGuard users; not bank data |
+| User-reported | One person's unverified claim, made by preparing an incident report |
+| Seeded demo data | Fixture rows shipped to make the demo legible; not observations |
+
+**Preparing an incident draft publishes nothing about anybody.** Reading what a
+report would say is not consent to file one, so no caller - signed in or not -
+can change what other users see about a third party. Publishing would belong to
+a submission endpoint that does not exist yet, and would need verified
+identity, an explicit opt-in, confirmation the payment happened, one report per
+person per address, rate limiting and moderation.
+
+Community standing may raise concern about an unusual amount and is never
+allowed to reduce one below its baseline. Reputation is keyed on a
+client-supplied device identifier that can be manipulated, so a path where good
+standing quietens a signal is a path where a manufactured reputation buys
+silence.
+
 
 ## Architecture
 
@@ -200,6 +251,9 @@ OCI deployment uses SSH credentials rather than application API keys; see the de
 | `POST` | `/api/v1/context/analyze` | Optional consent-gated context extraction with fallback |
 | `POST` | `/api/v1/response/prepare` | Prepare prevention/recovery evidence and actions |
 | `GET` | `/api/v1/history` | Assessment history for the `X-FinGuard-Device-ID` capability header |
+| `POST` | `/api/v1/trust/lookup` | Read one payee's standing without scoring a payment |
+| `POST` | `/api/v1/trust/check` | Check a link, a bare UPI ID, or an Indian mobile number |
+| `GET` | `/api/v1/policy/card` | Publish the scoring policy: weights, reasons, bands, limitations |
 | `GET` | `/api/v1/demo/scenarios` | Stable labelled demo inputs and expected results |
 
 All request models reject unknown fields. Validation errors are actionable and do not echo uploaded content. Screenshots are size/type/signature checked, are not logged, and are not stored. Risk scoring requires an explicit validated anonymous `device_id`; the public API never silently assigns the shared demo identity.

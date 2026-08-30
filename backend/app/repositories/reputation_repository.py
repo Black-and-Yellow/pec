@@ -148,17 +148,6 @@ class ReputationRepository:
             record.high_count += 1
         return prior
 
-    def record_report(self, vpa: str, *, now: datetime | None = None) -> None:
-        """Count a user-prepared incident report against this payee."""
-        moment = now or datetime.now(UTC)
-        normalized = vpa.strip().lower()
-        record = self._session.get(PayeeReputation, normalized)
-        if record is None:
-            record = _new_reputation(normalized, moment)
-            self._session.add(record)
-        record.reported_count += 1
-        record.last_seen_at = moment
-
     def _register_device(self, vpa: str, device_key: str, moment: datetime) -> bool:
         existing = self._session.scalar(
             select(PayeeDeviceObservation.id).where(

@@ -164,3 +164,69 @@ Updated: 2026-08-14
 - **blocked external:** revoke/rotate the exposed provider credentials without reproducing them in tickets or logs.
 - **blocked external:** production Android signing requires an operator-controlled private keystore and credentials; none will be generated or stored by this task.
 - **deferred:** PostgreSQL/shared persistence until the application moves beyond its documented single-node boundary.
+
+
+## Judge-readiness sprint evidence (2026-08-30, branch `edits`)
+
+Baseline: `cd14f77` on `feat/active-threat-radar`, working tree clean.
+
+| Milestone | Commit | Gates |
+|---|---|---|
+| 1 - trust and claim hardening | `98c1481` | 330 backend, ruff, mypy |
+| 2 - Policy Card | `64d3e93` | 340 backend, 131 Flutter, analyze |
+| 3 - Intent Shield | `8813863` | 351 backend, 137 Flutter, 11 e2e |
+
+Commands executed:
+
+- `python -m pytest -p no:cacheprovider` - 351 passed
+- `python -m ruff check .` - all checks passed
+- `python -m mypy app` - no issues in 46 source files
+- `flutter analyze` - no issues
+- `flutter test` - 137 passed
+- `npx playwright test` - 11 passed
+- `flutter build web --release` - built
+
+Decisions worth recording:
+
+- A weight-monotonicity test failed and the *test* was wrong: stating an amount
+  lowers the score because it replaces the open-ended-amount signal with the
+  unusual-amount one, and an open figure a caller dictates is deliberately the
+  worse of the two. The property now tested is that adding evidence to a fixed
+  request may only raise the score.
+- The beneficiary-name citation said "since 1 June 2026". NPCI circular
+  UPI/OC/101A/FY-2025-26 set compliance at 30 June 2025. Corrected in both the
+  backend evidence and the Flutter card.
+- Intent is deliberately excluded from scoring. A self-reported belief that
+  could move a grade would let anyone brand an address by lying to a dropdown.
+
+Not done: Milestone 4 (verdict comparison view) was scoped as optional and is
+not implemented. No push, merge, deploy, or PR was performed.
+
+
+## Second-opinion review follow-up (2026-08-30)
+
+Three findings, all addressed on `edits`.
+
+1. **Draft preparation must not publish.** Gating `record_report` behind an
+   authenticated account was not enough: reading what a report would say is
+   not consent to file one. The call and both supporting methods
+   (`ReputationRepository.record_report`, `TransactionRepository.mark_reported`)
+   were removed, along with the `get_optional_user` dependency added for the
+   gate. Nothing in the app now writes a report count.
+2. **Standing must not manufacture safety.** The proportional amount weight
+   pre-dates this branch and let a good grade drop the signal below the flat
+   `unusual_amount` baseline. It is now floored at that baseline for every
+   grade; standing escalates toward the ceiling and never below it.
+3. **Policy card absolutes softened**, and sources re-attributed: nine signals
+   moved to `FINGUARD_POLICY` where no advisory supports the specific
+   statement. The device-identifier limitation now says plainly that client
+   identifiers can be manipulated.
+
+Tests added in `tests/test_review_followups.py` (40 cases): guest and
+authenticated draft behaviour, invalid bearer token, `already_paid=false`,
+repeated drafts for one address, absence of the publish path, the A-to-A+
+amount boundary, a huge first payment to an A+ address, consecutive-snapshot
+stability, and exact 29/30 and 69/70 band edges.
+
+Gates: 391 backend tests at 95% branch coverage, 137 Flutter tests, 11 browser
+tests, ruff, mypy and analyze clean.

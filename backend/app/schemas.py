@@ -273,6 +273,34 @@ class TrustPillarCode(StrEnum):
     VELOCITY = "VELOCITY"
 
 
+class EvidenceProvenance(StrEnum):
+    """Where a piece of evidence came from.
+
+    Shown to the user because the four sources carry very different weight. A
+    structural read of an address is reproducible by anyone; a count of
+    FinGuard checks is real but is this network's own view and nobody else's;
+    a user report is one person's claim; seeded rows exist to make the demo
+    legible and are not observations of anything.
+    """
+
+    #: Computed from the request itself, on this device, with no lookup.
+    DEVICE_LOCAL = "DEVICE_LOCAL"
+    #: Counted from safety checks run by the FinGuard network. Not bank data.
+    FINGUARD_OBSERVED = "FINGUARD_OBSERVED"
+    #: Asserted by a person who prepared an incident report. Unverified.
+    USER_REPORTED = "USER_REPORTED"
+    #: Fixture data shipped for the demo. Not an observation.
+    SEEDED_DEMO = "SEEDED_DEMO"
+
+
+PROVENANCE_LABELS: dict[EvidenceProvenance, str] = {
+    EvidenceProvenance.DEVICE_LOCAL: "Read on this device",
+    EvidenceProvenance.FINGUARD_OBSERVED: "FinGuard checks",
+    EvidenceProvenance.USER_REPORTED: "User-reported",
+    EvidenceProvenance.SEEDED_DEMO: "Seeded demo data",
+}
+
+
 class TrustPillar(StrictModel):
     code: TrustPillarCode
     label: str = Field(min_length=1, max_length=80)
@@ -280,6 +308,7 @@ class TrustPillar(StrictModel):
     maximum: int = Field(ge=1, le=100)
     status: TrustPillarStatus
     evidence: str = Field(min_length=1, max_length=400)
+    provenance: EvidenceProvenance = EvidenceProvenance.FINGUARD_OBSERVED
 
 
 class PayeeTrust(StrictModel):
@@ -313,6 +342,34 @@ class PayeeTrust(StrictModel):
     distinct_device_count: int = Field(ge=0)
     reported_count: int = Field(ge=0)
     disclaimer: str = Field(min_length=1, max_length=400)
+
+
+class PolicyBandPayload(StrictModel):
+    name: Literal["SAFE", "CAUTION", "HIGH"]
+    minimum: int = Field(ge=0, le=100)
+    maximum: int = Field(ge=0, le=100)
+    meaning: str = Field(min_length=1, max_length=200)
+
+
+class PolicySignalPayload(StrictModel):
+    field: str = Field(min_length=1, max_length=64)
+    title: str = Field(min_length=1, max_length=80)
+    points: int = Field(ge=0, le=100)
+    rationale: str = Field(min_length=1, max_length=400)
+    source_category: Literal[
+        "NPCI_ADVISORY", "RBI_ADVISORY", "I4C_ADVISORY", "FINGUARD_POLICY"
+    ]
+    source_link: str = Field(max_length=300)
+
+
+class PolicyCardResponse(StrictModel):
+    """How the score is built, served by the side that owns the numbers."""
+
+    policy_version: str = Field(min_length=1, max_length=32)
+    bands: list[PolicyBandPayload]
+    signals: list[PolicySignalPayload]
+    limitations: list[str]
+    calibration_statement: str = Field(min_length=1, max_length=400)
 
 
 class TrustLookupRequest(StrictModel):
@@ -359,9 +416,40 @@ class IdentifierCheckResponse(StrictModel):
     reason: str | None = None
 
 
+class IntentShieldPayload(StrictModel):
+    """A user-expectation check, deliberately outside the risk score.
+
+    A mismatch means the person was told something untrue about the request.
+    It says nothing about the payee, so it never contributes points.
+    """
+
+    intent: Literal[
+        "SEND_MONEY",
+        "RECEIVE_MONEY",
+        "REFUND_OR_REWARD",
+        "VERIFY_KYC_OR_ACCOUNT",
+        "INSPECT_ONLY",
+    ]
+    mismatched: StrictBool
+    headline: str | None = Field(default=None, max_length=120)
+    detail: str | None = Field(default=None, max_length=300)
+    rule: str | None = Field(default=None, max_length=300)
+
+
 class RiskScoreRequest(StrictModel):
     payment: PaymentDetails
     device_id: DeviceId
+    #: What the user said they expect. Never affects the score.
+    intent: (
+        Literal[
+            "SEND_MONEY",
+            "RECEIVE_MONEY",
+            "REFUND_OR_REWARD",
+            "VERIFY_KYC_OR_ACCOUNT",
+            "INSPECT_ONLY",
+        ]
+        | None
+    ) = None
     context: ContextSignals | None = None
     context_token: ContextToken | None = None
     environment: EnvironmentSignals | None = None
@@ -420,6 +508,8 @@ class RiskScoreResponse(RiskAssessmentPayload):
     requires_confirmation: bool
     handoff_policy: Literal["NORMAL", "DELIBERATE_CONFIRMATION", "PAUSED"]
     assessed_at: datetime
+    #: Present only when the user stated an expectation. Never scored.
+    intent_shield: IntentShieldPayload | None = None
 
 
 class ResponsePrepareRequest(StrictModel):

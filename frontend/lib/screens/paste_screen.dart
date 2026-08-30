@@ -1,7 +1,10 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 import '../models/context_analysis.dart';
 import '../models/history_entry.dart';
+import '../models/intent_shield.dart';
 import '../models/payment.dart';
 import '../models/risk.dart';
 import '../services/api_service.dart';
@@ -34,6 +37,11 @@ class PasteScreen extends StatefulWidget {
 class _PasteScreenState extends State<PasteScreen> {
   late final TextEditingController _controller;
   bool _loading = false;
+
+  /// What the user says they expect. Optional, and never scored: it is
+  /// compared against what the request does, and a mismatch means the person
+  /// was told something untrue, not that the payee is a fraudster.
+  PaymentIntent? _intent;
   String? _error;
 
   @override
@@ -135,6 +143,13 @@ class _PasteScreenState extends State<PasteScreen> {
             ),
           ],
           const SizedBox(height: 22),
+          _IntentPicker(
+            selected: _intent,
+            enabled: !_loading,
+            onChanged: (PaymentIntent? value) =>
+                setState(() => _intent = value),
+          ),
+          const SizedBox(height: 22),
           AsyncFilledButton(
             buttonKey: const Key('analyze_payment_button'),
             loading: _loading,
@@ -184,9 +199,7 @@ class _PasteScreenState extends State<PasteScreen> {
           .services
           .threatEnvironment
           .remoteAccessTools();
-      final CallActivity callActivity = await widget
-          .services
-          .threatEnvironment
+      final CallActivity callActivity = await widget.services.threatEnvironment
           .callActivity();
       final RiskScoreResult scoreResult = await widget.services.api
           .scorePayment(
@@ -195,6 +208,7 @@ class _PasteScreenState extends State<PasteScreen> {
             context: validatedContext,
             remoteAccessTools: remoteAccessTools,
             callActivity: callActivity,
+            intent: _intent,
           );
       final Payment validatedPayment = scoreResult.payment;
       final RiskAssessment assessment = scoreResult.assessment;
@@ -223,6 +237,7 @@ class _PasteScreenState extends State<PasteScreen> {
             payment: validatedPayment,
             assessment: assessment,
             payeeTrust: scoreResult.payeeTrust,
+            intentShield: scoreResult.intentShield,
             paymentHandoffEnabled: scoreResult.paymentHandoffEnabled,
             contextAnalysis: validatedContext,
             consentToExternalAi: widget.consentToExternalAi,
@@ -288,4 +303,82 @@ class _PasteScreenState extends State<PasteScreen> {
       ),
     );
   }
+}
+
+/// Asks what the user believes this request will do, before it is analysed.
+///
+/// Optional on purpose. Somebody who just wants a verdict should not be made
+/// to answer a question first, and an unanswered picker produces no warning
+/// rather than a default assumption.
+class _IntentPicker extends StatelessWidget {
+  const _IntentPicker({
+    required this.selected,
+    required this.enabled,
+    required this.onChanged,
+  });
+
+  final PaymentIntent? selected;
+  final bool enabled;
+  final ValueChanged<PaymentIntent?> onChanged;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    key: const Key('intent_picker'),
+    width: double.infinity,
+    padding: const EdgeInsets.all(16),
+    decoration: BoxDecoration(
+      color: AppColors.surface,
+      border: Border.all(color: AppColors.border),
+      borderRadius: BorderRadius.circular(12),
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        Text(
+          'What do you expect this to do?',
+          style: Theme.of(context).textTheme.titleSmall,
+        ),
+        const SizedBox(height: 3),
+        Text(
+          'Optional. This never changes the risk score - it only checks your '
+          'expectation against what the request actually does.',
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+            color: AppColors.inkMuted,
+            height: 1.4,
+          ),
+        ),
+        const SizedBox(height: 10),
+        // A chip sizes itself to its label, so on a narrow phone the longest
+        // option ran past its own border and lost the last characters. Capping
+        // the label to the space actually available lets it wrap onto a second
+        // line instead, which also holds at a large text scale.
+        LayoutBuilder(
+          builder: (BuildContext context, BoxConstraints constraints) => Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: <Widget>[
+              for (final PaymentIntent intent in PaymentIntent.values)
+                ChoiceChip(
+                  key: Key('intent_${intent.apiValue}'),
+                  label: ConstrainedBox(
+                    constraints: BoxConstraints(
+                      maxWidth: math.max(120, constraints.maxWidth - 52),
+                    ),
+                    child: Text(
+                      intent.label,
+                      softWrap: true,
+                      overflow: TextOverflow.visible,
+                    ),
+                  ),
+                  selected: selected == intent,
+                  onSelected: enabled
+                      ? (bool value) => onChanged(value ? intent : null)
+                      : null,
+                ),
+            ],
+          ),
+        ),
+      ],
+    ),
+  );
 }

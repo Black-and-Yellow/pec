@@ -86,11 +86,11 @@ def test_a_mule_shaped_ledger_is_named_on_the_lookup_surface(client: TestClient)
     """
     body = check(client, "rahul.sharma91@ybl")
     assert body["addresses"][0]["trust"]["grade"] == "B"
-    assert "Mule accounts collect from many unrelated payers" in body["summary"]
+    assert "Circulated scam addresses are checked like this" in body["summary"]
     # And it must still refuse to call it fraud.
     assert "not as proof of fraud" in body["summary"]
 
 
 def test_an_ordinary_payee_gets_no_collection_warning(client: TestClient) -> None:
     body = check(client, "coffee.corner@okaxis")
-    assert "Mule accounts" not in body["summary"]
+    assert "Circulated scam addresses" not in body["summary"]

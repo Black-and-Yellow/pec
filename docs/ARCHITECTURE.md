@@ -181,3 +181,55 @@ GitHub Actions tests backend and Flutter code before the main-branch deploy work
 ## Scaling boundary
 
 The included deployment is a production-hardened single-node baseline. It deliberately avoids Redis, queues, microservices, Kubernetes, paid notification providers, banking integrations, and automatic reporting. A multi-node rollout must first replace SQLite with shared managed persistence and introduce versioned migrations. Email verification/password recovery also requires a selected transactional email provider. Those are infrastructure integrations, not hidden local code switches.
+
+
+## Scoring authority and the Policy Card (2026-08-30)
+
+`risk_policy.py` holds the only weights and thresholds in the system, and
+`RiskEngine` is the only thing that turns them into a score or a verdict. Two
+rules keep it that way:
+
+- The client never stores weights. `GET /api/v1/policy/card` publishes them,
+  and the Flutter drawer renders whatever the server returns. A client copy
+  would be a second authority able to disagree silently with the engine.
+- The card is generated from `RiskWeights` itself. An undocumented weight or a
+  stale rationale raises at build time rather than shipping a document that
+  describes a policy no longer in force.
+
+AI is confined to context extraction. It returns strict enumerated signals and
+cannot set, adjust, or override a score.
+
+## Intent Shield
+
+`intent_shield.py` compares an enumerated user expectation against the parsed
+direction of the request. It is deterministic, has no model, and is reported in
+its own response field. It contributes no points, and a test asserts the score
+is identical across every intent value - a self-reported belief must never be
+able to move a third party's grade.
+
+## Evidence provenance
+
+`EvidenceProvenance` labels each trust pillar with its source: read on this
+device, FinGuard checks, user-reported, or seeded demo. The four are not
+equally strong and the UI says which is which.
+
+Reputation is keyed on a client-supplied device identifier that can be
+manipulated, so reach, tenure and velocity can be inflated by anyone willing to
+do so. Two consequences follow, and both are enforced in code:
+
+- **Nothing writes to shared reputation from a user action.** `record_report`
+  and its caller were removed outright rather than gated, because gating still
+  turned an exploratory tap on a draft screen into a permanent public
+  accusation.
+- **Standing may escalate a signal, never discount one.** The flat
+  `unusual_amount` weight is a floor for every grade including the best, so a
+  large first payment to a top-rated address is not quietened by reputation
+  that anyone could inflate.
+
+## Relationship to bank-side systems
+
+FinGuard observes safety checks. Banks and RBIH MuleHunter observe
+transactions. The collection-account signal here is check-pattern evidence: an
+address looked up by many unrelated people once each, in a short window. It is
+consistent with a circulated scam address and is not proof that money moved.
+The two systems are complementary and FinGuard claims no access to the other.

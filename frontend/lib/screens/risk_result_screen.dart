@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../models/context_analysis.dart';
+import '../models/intent_shield.dart';
 import '../models/payee_trust.dart';
 import '../models/payment.dart';
 import '../models/risk.dart';
@@ -14,6 +15,7 @@ import '../services/app_services.dart';
 import '../services/report_builder.dart';
 import '../theme/app_theme.dart';
 import '../widgets/common.dart';
+import '../widgets/policy_card_drawer.dart';
 import '../widgets/trust_report.dart';
 import 'incident_screen.dart';
 
@@ -28,6 +30,7 @@ class RiskResultScreen extends StatefulWidget {
     this.contextAnalysis,
     this.consentToExternalAi = false,
     this.isDemo = false,
+    this.intentShield,
   });
 
   final AppServices services;
@@ -42,6 +45,10 @@ class RiskResultScreen extends StatefulWidget {
   final ContextAnalysis? contextAnalysis;
   final bool consentToExternalAi;
   final bool isDemo;
+
+  /// The user-expectation check. Reported beside the verdict and never inside
+  /// it: a mismatch means the person was misled, not that the payee is bad.
+  final IntentShield? intentShield;
 
   @override
   State<RiskResultScreen> createState() => _RiskResultScreenState();
@@ -170,6 +177,10 @@ class _RiskResultScreenState extends State<RiskResultScreen> {
     final Widget result = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
+        if (widget.intentShield?.mismatched ?? false) ...<Widget>[
+          _IntentMismatchCard(shield: widget.intentShield!),
+          const SizedBox(height: 18),
+        ],
         _ResultHeader(assessment: widget.assessment, isDemo: widget.isDemo),
         const SizedBox(height: 16),
         _ExplanationCard(explanation: _explanation, aiWording: _aiWording),
@@ -222,6 +233,11 @@ class _RiskResultScreenState extends State<RiskResultScreen> {
           headerKey: const Key('why_this_score_toggle'),
           child: _SignalListContent(assessment: widget.assessment),
         ),
+        // Directly under the signal list, because that is where a sceptical
+        // reader forms the question this answers: where do the numbers come
+        // from, and who decided them?
+        const SizedBox(height: 14),
+        PolicyCardDrawer(load: widget.services.api.fetchPolicyCard),
       ],
     );
     final bool showQuickStop =
@@ -1341,13 +1357,14 @@ class _PayeeNameClaimCard extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 8),
-              // The instruction above is not advice FinGuard invented: every
-              // UPI app has been required to show the bank-verified name
-              // since 1 June 2026. Citing the rule tells the user the check
-              // is guaranteed to be available, not merely likely.
+              // Not advice FinGuard invented: NPCI circular
+              // UPI/OC/101A/FY-2025-26 required apps to display the
+              // bank-verified beneficiary name, compliance due 30 June 2025.
+              // Citing the rule tells the user the check is guaranteed to be
+              // available, not merely likely.
               Text(
-                'Every UPI app in India has been required to show the '
-                'bank-verified name since 1 June 2026.',
+                'NPCI has required UPI apps to show the bank-verified '
+                'beneficiary name since 30 June 2025.',
                 key: const Key('payee_name_mandate_citation'),
                 style: Theme.of(context).textTheme.labelSmall?.copyWith(
                   color: AppColors.inkMuted,
@@ -1355,6 +1372,80 @@ class _PayeeNameClaimCard extends StatelessWidget {
                 ),
               ),
             ],
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
+/// Shown above the verdict when the user expected money in and the request
+/// pays money out.
+///
+/// Deliberately louder than the score, and deliberately separate from it. The
+/// score answers "is this payee dangerous"; this answers "were you told the
+/// truth about what this does", and for refund and KYC scams the second
+/// question is the one that saves the money.
+class _IntentMismatchCard extends StatelessWidget {
+  const _IntentMismatchCard({required this.shield});
+
+  final IntentShield shield;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    key: const Key('intent_mismatch_card'),
+    width: double.infinity,
+    padding: const EdgeInsets.all(18),
+    decoration: BoxDecoration(
+      color: AppColors.dangerSurface,
+      borderRadius: BorderRadius.circular(12),
+      border: Border.all(color: AppColors.danger, width: 1.5),
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        Row(
+          children: <Widget>[
+            const Icon(Icons.pan_tool_outlined, color: AppColors.danger),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                shield.headline ?? 'This request sends money.',
+                key: const Key('intent_mismatch_headline'),
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                  color: AppColors.danger,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
+          ],
+        ),
+        if (shield.detail != null) ...<Widget>[
+          const SizedBox(height: 10),
+          Text(
+            shield.detail!,
+            style: Theme.of(
+              context,
+            ).textTheme.bodyMedium?.copyWith(height: 1.5),
+          ),
+        ],
+        if (shield.rule != null) ...<Widget>[
+          const SizedBox(height: 10),
+          Text(
+            shield.rule!,
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+              height: 1.5,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
+        const SizedBox(height: 10),
+        Text(
+          'This is based on what you told FinGuard you expected. It does not '
+          'change the risk score below.',
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+            color: AppColors.inkMuted,
+            height: 1.4,
           ),
         ),
       ],

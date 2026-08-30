@@ -7,7 +7,6 @@ from sqlalchemy.orm import Session
 
 from app.api.dependencies import get_session, get_settings
 from app.config import Settings
-from app.repositories.reputation_repository import ReputationRepository
 from app.repositories.transaction_repository import TransactionRepository
 from app.schemas import PreparedResponse, ResponsePrepareRequest
 from app.services.response_builder import build_prepared_response
@@ -53,12 +52,20 @@ def prepare_response(
             },
         )
 
-    # Preparing a report is a person naming this payee as the source of harm.
-    # It is the strongest conduct signal the network has, so it is counted
-    # once per assessment and never on a repeat tap.
-    if transactions.mark_reported(assessment.assessment_id):
-        ReputationRepository(session).record_report(stored.payment.vpa)
-        session.commit()
+    # Nothing here writes to shared reputation, for anyone, ever.
+    #
+    # This endpoint produces a private draft. Reading what a report would say
+    # is not consent to publish one: a user may open the screen to understand
+    # their options, to copy the wording, or by mistake, and none of those is
+    # a decision to mark a third party publicly. Gating it behind a signed-in
+    # account was not enough either - it still turned an exploratory tap into
+    # a permanent, visible accusation.
+    #
+    # Publishing belongs to a submission endpoint that does not exist yet, and
+    # would need verified identity, an explicit opt-in, confirmation that the
+    # payment actually happened, one report per person per address, rate
+    # limiting and a moderation path. Until all of that exists, the honest
+    # behaviour is to write nothing.
 
     return build_prepared_response(
         payment=stored.payment,

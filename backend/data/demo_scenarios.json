@@ -27,7 +27,7 @@
     "device_id": "demo-device",
     "context": null,
     "expected_level": "CAUTION",
-    "expected_score": 33
+    "expected_score": 37
   },
   {
     "id": "fake-kyc",

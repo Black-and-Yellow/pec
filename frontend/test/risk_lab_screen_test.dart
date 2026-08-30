@@ -42,7 +42,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('CAUTION'), findsWidgets);
-    expect(_score(tester), '33');
+    expect(_score(tester), '37');
     expect(find.text('Case 3 of 4'), findsOneWidget);
     expect(_previousButton(tester).onPressed, isNotNull);
     expect(_nextButton(tester).onPressed, isNotNull);
@@ -62,7 +62,7 @@ void main() {
     await tester.tap(find.byKey(const Key('risk_lab_previous_case')));
     await tester.pumpAndSettle();
 
-    expect(_score(tester), '33');
+    expect(_score(tester), '37');
     expect(find.text('Case 3 of 4'), findsOneWidget);
   });
 
@@ -90,7 +90,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(_score(tester), '33');
+    expect(_score(tester), '37');
     expect(find.text('Case 3 of 4'), findsOneWidget);
 
     await tester.tap(find.byKey(const Key('risk_lab_spectrum_fake-kyc')));

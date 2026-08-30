@@ -85,7 +85,7 @@ def test_all_demo_scenarios_are_stable_and_repeatable(client: TestClient) -> Non
     expected_results = {
         "coffee-shop": ((0, 0), "SAFE"),
         "tea-stall": ((23, 23), "SAFE"),
-        "marketplace-seller": ((33, 33), "CAUTION"),
+        "marketplace-seller": ((37, 37), "CAUTION"),
         "fake-kyc": ((100, 100), "HIGH"),
     }
 
@@ -176,7 +176,7 @@ def test_history_contains_assessments_without_changing_completed_history(
     second = client.post(
         "/api/v1/risk/score", json={"payment": payment, "device_id": "history-device"}
     ).json()
-    assert first["score"] == second["score"] == 32
+    assert first["score"] == second["score"] == 37
 
     history = client.get("/api/v1/history", headers={"X-FinGuard-Device-ID": "history-device"})
     assert history.status_code == 200
@@ -319,7 +319,7 @@ def test_risk_explain_falls_back_when_gemini_wording_is_malformed(
     assert response.json()["source"] == "template"
     assert response.json()["status"] == "malformed_response"
     assert "rated this " in response.json()["explanation"]
-    assert before["score"] == 32
+    assert before["score"] == 37
     assert before["level"] == "CAUTION"
 
 
@@ -411,8 +411,8 @@ def test_prepare_response_rejects_payment_mismatch_and_ignores_score_tampering(
         json={"payment": payment, "assessment": tampered, "already_paid": True},
     )
     assert prepared.status_code == 200
-    assert prepared.json()["report"]["risk_score"] == 26
-    assert prepared.json()["report"]["risk_level"] == "SAFE"
+    assert prepared.json()["report"]["risk_score"] == 35
+    assert prepared.json()["report"]["risk_level"] == "CAUTION"
 
 
 def test_health_returns_service_unavailable_when_database_check_fails(

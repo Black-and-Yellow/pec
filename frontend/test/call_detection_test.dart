@@ -55,6 +55,8 @@ void main() {
       find.byKey(const Key('upi_uri_field')),
       'upi://pay?pa=merchant%40upi&pn=Merchant&am=100&cu=INR',
     );
+    await tester.ensureVisible(find.byKey(const Key('analyze_payment_button')));
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('analyze_payment_button')));
     await tester.pumpAndSettle();
 
@@ -81,6 +83,8 @@ void main() {
       find.byKey(const Key('upi_uri_field')),
       'upi://pay?pa=merchant%40upi&pn=Merchant&am=100&cu=INR',
     );
+    await tester.ensureVisible(find.byKey(const Key('analyze_payment_button')));
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('analyze_payment_button')));
     await tester.pumpAndSettle();
 

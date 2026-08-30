@@ -65,3 +65,44 @@
 ## Close
 
 **Say:** “FinGuard turns a rushed payment moment into a short, informed pause—clear evidence, deterministic scoring, and explicit human confirmation.”
+
+
+## Judge-facing additions (2026-08-30)
+
+### Check anything, not just a payment link
+
+Open **Check before you pay** and paste any of these. FinGuard decides what the
+input is and routes it:
+
+| Input | What it demonstrates |
+|---|---|
+| `rahul.sharma91@ybl` | Structurally clean address, grade B, collection pattern named anyway |
+| `sbi-refund@okaxis` | Grade D with an empty ledger, on address structure alone |
+| `kyc-verify-now@ybl` | Pretext wording caught with no history at all |
+| `+91 91827 36450` | Phone number expanded to phone-shaped addresses already seen |
+| `anita.tailors@ybl` | A genuine new payee stays SAFE - proof it does not flag everything |
+
+Say out loud: a mobile lookup checks addresses FinGuard has already observed.
+It cannot identify who owns a number.
+
+### Intent Shield
+
+On **Paste UPI Link**, choose *"I was promised a refund or reward"*, then
+analyse a normal `upi://pay` request. The result screen leads with **STOP -
+this request sends money**, above the verdict.
+
+The line that matters: this never touches the risk score. It says the user was
+told something untrue, not that the payee is a fraudster.
+
+### "How this policy was chosen"
+
+Open the drawer under the signal list on any result. It shows every weight,
+why it exists, and which advisory supports its direction - fetched from the
+backend, because the app must not hold a second copy of the numbers.
+
+Read the first line aloud: *official guidance supports the risk factor, not the
+exact numeric points; these are deterministic intervention values and are not
+statistically calibrated fraud probabilities.*
+
+That sentence is the strongest thing in the demo. It is what a team that
+understands its own model says, and what a team that does not cannot.

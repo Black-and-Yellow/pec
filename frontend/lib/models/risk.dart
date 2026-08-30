@@ -1,3 +1,4 @@
+import 'intent_shield.dart';
 import 'payee_trust.dart';
 import 'payment.dart';
 
@@ -255,6 +256,7 @@ final class RiskScoreResult {
     required this.requiresConfirmation,
     required this.handoffPolicy,
     required this.assessedAt,
+    this.intentShield,
   });
 
   final Payment payment;
@@ -264,6 +266,9 @@ final class RiskScoreResult {
   final RiskHandoffPolicy handoffPolicy;
   final DateTime assessedAt;
 
+  /// Present only when the user stated an expectation before the check.
+  final IntentShield? intentShield;
+
   // A result can only be created after the complete live response envelope,
   // echoed payment, and server control values have passed validation.
   bool get paymentHandoffEnabled => true;
@@ -272,8 +277,12 @@ final class RiskScoreResult {
     Map<String, Object?> json, {
     required Payment requestedPayment,
   }) {
-    if (json.length != _fieldNames.length ||
-        !json.keys.every(_fieldNames.contains)) {
+    final bool hasEveryRequiredKey = _fieldNames.every(json.containsKey);
+    final bool hasOnlyKnownKeys = json.keys.every(
+      (String key) =>
+          _fieldNames.contains(key) || _optionalFieldNames.contains(key),
+    );
+    if (!hasEveryRequiredKey || !hasOnlyKnownKeys) {
       throw const FormatException(
         'The risk response contained an incomplete or invalid envelope.',
       );
@@ -335,6 +344,7 @@ final class RiskScoreResult {
       requiresConfirmation: rawRequiresConfirmation,
       handoffPolicy: handoffPolicy,
       assessedAt: _requiredAssessedAt(json['assessed_at']),
+      intentShield: IntentShield.fromApiJson(json['intent_shield']),
     );
   }
 
@@ -394,6 +404,11 @@ final class RiskScoreResult {
     'handoff_policy',
     'assessed_at',
   };
+
+  /// Keys the envelope may carry but need not. Keeping a newly added field
+  /// optional means an app built against an older backend still reads a
+  /// response, instead of rejecting the whole verdict over one absent key.
+  static const Set<String> _optionalFieldNames = <String>{'intent_shield'};
   static final RegExp _timestampPattern = RegExp(
     r'^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?(?:Z|[+-]\d{2}:\d{2})$',
   );

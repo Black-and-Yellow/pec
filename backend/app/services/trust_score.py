@@ -35,6 +35,7 @@ from typing import Literal
 
 from app.repositories.reputation_repository import ReputationSnapshot
 from app.schemas import (
+    EvidenceProvenance,
     PayeeTrust,
     TrustGrade,
     TrustPillar,
@@ -226,6 +227,7 @@ class TrustScorer:
             maximum=identity.maximum,
             status=status,
             evidence=evidence[:400],
+            provenance=EvidenceProvenance.DEVICE_LOCAL,
         )
 
     def _tenure_pillar(self, reputation: ReputationSnapshot) -> TrustPillar:
@@ -248,13 +250,13 @@ class TrustScorer:
         points = _reach_points(devices)
         return TrustPillar(
             code=TrustPillarCode.REACH,
-            label="How many people have met it",
+            label="How many independent sources checked it",
             points=points,
             maximum=REACH_MAXIMUM,
             status=_status(points, REACH_MAXIMUM),
             evidence=(
                 f"Checked from {_plural(devices, 'distinct device', 'distinct devices')}. "
-                "A real shop accumulates many payers; a one-victim address does not."
+                "A real shop is looked up by many different people; a one-victim address is not."
             ),
         )
 
@@ -274,6 +276,7 @@ class TrustScorer:
                     f"This address matches {seeded_indicator_label} in FinGuard's clearly "
                     "labelled seeded demo indicator set."
                 ),
+                provenance=EvidenceProvenance.SEEDED_DEMO,
             )
         checks = max(1, reputation.check_count)
         # A prepared incident report is a person deciding this address harmed
@@ -303,6 +306,11 @@ class TrustScorer:
             maximum=CONDUCT_MAXIMUM,
             status=_status(points, CONDUCT_MAXIMUM),
             evidence=evidence,
+            provenance=(
+                EvidenceProvenance.USER_REPORTED
+                if reputation.reported_count > 0
+                else EvidenceProvenance.FINGUARD_OBSERVED
+            ),
         )
 
     def _velocity_pillar(self, reputation: ReputationSnapshot) -> TrustPillar:
@@ -316,26 +324,29 @@ class TrustScorer:
                 maximum=VELOCITY_MAXIMUM,
                 status=TrustPillarStatus.NEUTRAL,
                 evidence=(
-                    "Too few payers so far to tell a steady payee from a campaign burst."
+                    "Too few independent checks so far to tell a steady payee "
+                    "from a campaign burst."
                 ),
             )
         burst = recent / devices
         if burst > 0.6 and recent >= 10:
             points = 0
             evidence = (
-                f"{recent} of {devices} payers met this address in the last week. That "
+                f"{recent} of {devices} check sources first saw this address in the "
+                "last week. That "
                 "concentration is what a fresh scam campaign looks like."
             )
         elif burst > 0.35:
             points = 2
             evidence = (
-                f"{recent} of {devices} payers are from the last week, which is faster "
+                f"{recent} of {devices} check sources are from the last week, "
+                "which is faster "
                 "growth than an established payee usually shows."
             )
         else:
             points = VELOCITY_MAXIMUM
             evidence = (
-                f"Only {recent} of {devices} payers are new this week, so its use is steady "
+                f"Only {recent} of {devices} check sources are new this week, so its use is steady "
                 "rather than a burst."
             )
         return TrustPillar(
@@ -379,7 +390,7 @@ class TrustScorer:
             ),
             TrustPillar(
                 code=TrustPillarCode.REACH,
-                label="How many people have met it",
+                label="How many independent sources checked it",
                 points=0,
                 maximum=REACH_MAXIMUM,
                 status=TrustPillarStatus.NO_DATA,
@@ -399,7 +410,7 @@ class TrustScorer:
                 points=0,
                 maximum=VELOCITY_MAXIMUM,
                 status=TrustPillarStatus.NO_DATA,
-                evidence="Not enough payers to compare this week against any baseline.",
+                evidence="Not enough independent checks to compare this week against any baseline.",
             ),
         ]
 
@@ -440,7 +451,7 @@ class TrustScorer:
         if reputation.reported_count > 0:
             return "Someone in the network has reported this address"
         return {
-            TrustGrade.A_PLUS: "Long-established payee across many payers",
+            TrustGrade.A_PLUS: "Long-established address across many independent checks",
             TrustGrade.A: "Established payee with a clean record here",
             TrustGrade.B: "Some track record, nothing adverse on file",
             TrustGrade.C: "Thin track record and a weak address structure",

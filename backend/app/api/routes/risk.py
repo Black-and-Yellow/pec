@@ -17,12 +17,14 @@ from app.repositories.indicator_repository import IndicatorRepository
 from app.repositories.reputation_repository import ReputationRepository
 from app.repositories.transaction_repository import TransactionRepository
 from app.schemas import (
+    IntentShieldPayload,
     RiskExplainRequest,
     RiskExplainResponse,
     RiskLevel,
     RiskScoreRequest,
     RiskScoreResponse,
 )
+from app.services import intent_shield
 from app.services.context_integrity import ContextIntegrityError, ContextIntegrityService
 from app.services.explanation_service import ExplanationService
 from app.services.risk_engine import RiskEngine, RiskInputs
@@ -117,6 +119,12 @@ def score_payment(
         max_assessed_records_total=settings.max_assessed_records_total,
         max_assessed_records_per_device=settings.max_assessed_records_per_device,
     )
+    # Compared after scoring and never folded into it. A upi://pay request
+    # debits whoever approves it, which is a parsed fact rather than a guess.
+    shield = intent_shield.assess(
+        intent_shield.PaymentIntent(request.intent) if request.intent else None,
+        request_sends_money=True,
+    )
     return RiskScoreResponse(
         assessment_id=stored.assessment_id,
         transaction_id=stored.transaction_id,
@@ -129,6 +137,17 @@ def score_payment(
         requires_confirmation=assessment.level is not RiskLevel.SAFE,
         handoff_policy=_handoff_policy(assessment.level),
         assessed_at=stored.assessed_at,
+        intent_shield=(
+            IntentShieldPayload(
+                intent=shield.intent.value,
+                mismatched=shield.mismatched,
+                headline=shield.headline,
+                detail=shield.detail,
+                rule=shield.rule,
+            )
+            if request.intent is not None
+            else None
+        ),
     )
 
 

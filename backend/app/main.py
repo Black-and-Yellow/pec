@@ -23,6 +23,7 @@ from app.api.routes import (
     health,
     history,
     payments,
+    policy,
     response,
     risk,
     trust,
@@ -209,6 +210,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     api.include_router(payments.router, prefix=prefix)
     api.include_router(risk.router, prefix=prefix)
     api.include_router(trust.router, prefix=prefix)
+    api.include_router(policy.router, prefix=prefix)
     api.include_router(context.router, prefix=prefix)
     api.include_router(response.router, prefix=prefix)
     api.include_router(history.router, prefix=prefix)
