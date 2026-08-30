@@ -7,6 +7,7 @@ import 'package:http/http.dart' as http;
 import '../config/app_config.dart';
 import '../models/context_analysis.dart';
 import '../models/identifier_check.dart';
+import '../models/intent_shield.dart';
 import '../models/payee_trust.dart';
 import '../models/payment.dart';
 import '../models/policy_card.dart';
@@ -23,6 +24,7 @@ abstract interface class FinGuardApi {
     ContextAnalysis? context,
     List<String> remoteAccessTools,
     CallActivity callActivity,
+    PaymentIntent? intent,
   });
 
   /// Reads a payee's standing without scoring or recording a payment.
@@ -121,6 +123,7 @@ final class ApiService implements FinGuardApi {
     ContextAnalysis? context,
     List<String> remoteAccessTools = const <String>[],
     CallActivity callActivity = CallActivity.none,
+    PaymentIntent? intent,
   }) async {
     final ContextAnalysis? validatedContext =
         context?.hasValidatedContext == true ? context : null;
@@ -142,6 +145,7 @@ final class ApiService implements FinGuardApi {
               'remote_access_tools': safeTools,
               'call_activity': callActivity.apiValue,
             },
+          if (intent != null) 'intent': intent.apiValue,
         });
     return RiskScoreResult.fromApiJson(json, requestedPayment: payment);
   }

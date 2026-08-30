@@ -5,6 +5,7 @@ import 'dart:ui';
 import 'package:finguard/models/auth_session.dart';
 import 'package:finguard/models/context_analysis.dart';
 import 'package:finguard/models/identifier_check.dart';
+import 'package:finguard/models/intent_shield.dart';
 import 'package:finguard/models/payee_trust.dart';
 import 'package:finguard/models/payment.dart';
 import 'package:finguard/models/policy_card.dart';
@@ -34,6 +35,7 @@ final class FakeApi implements FinGuardApi {
   ContextAnalysis? lastScoreContext;
   List<String> lastRemoteAccessTools = const <String>[];
   CallActivity lastCallActivity = CallActivity.none;
+  PaymentIntent? lastIntent;
   String? lastTrustLookupVpa;
   int trustLookupCount = 0;
   PayeeTrust? trustLookupResult;
@@ -181,7 +183,9 @@ final class FakeApi implements FinGuardApi {
     ContextAnalysis? context,
     List<String> remoteAccessTools = const <String>[],
     CallActivity callActivity = CallActivity.none,
+    PaymentIntent? intent,
   }) async {
+    lastIntent = intent;
     lastScoreContext = context;
     lastRemoteAccessTools = remoteAccessTools;
     lastCallActivity = callActivity;

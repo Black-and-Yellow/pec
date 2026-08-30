@@ -416,9 +416,40 @@ class IdentifierCheckResponse(StrictModel):
     reason: str | None = None
 
 
+class IntentShieldPayload(StrictModel):
+    """A user-expectation check, deliberately outside the risk score.
+
+    A mismatch means the person was told something untrue about the request.
+    It says nothing about the payee, so it never contributes points.
+    """
+
+    intent: Literal[
+        "SEND_MONEY",
+        "RECEIVE_MONEY",
+        "REFUND_OR_REWARD",
+        "VERIFY_KYC_OR_ACCOUNT",
+        "INSPECT_ONLY",
+    ]
+    mismatched: StrictBool
+    headline: str | None = Field(default=None, max_length=120)
+    detail: str | None = Field(default=None, max_length=300)
+    rule: str | None = Field(default=None, max_length=300)
+
+
 class RiskScoreRequest(StrictModel):
     payment: PaymentDetails
     device_id: DeviceId
+    #: What the user said they expect. Never affects the score.
+    intent: (
+        Literal[
+            "SEND_MONEY",
+            "RECEIVE_MONEY",
+            "REFUND_OR_REWARD",
+            "VERIFY_KYC_OR_ACCOUNT",
+            "INSPECT_ONLY",
+        ]
+        | None
+    ) = None
     context: ContextSignals | None = None
     context_token: ContextToken | None = None
     environment: EnvironmentSignals | None = None
@@ -477,6 +508,8 @@ class RiskScoreResponse(RiskAssessmentPayload):
     requires_confirmation: bool
     handoff_policy: Literal["NORMAL", "DELIBERATE_CONFIRMATION", "PAUSED"]
     assessed_at: datetime
+    #: Present only when the user stated an expectation. Never scored.
+    intent_shield: IntentShieldPayload | None = None
 
 
 class ResponsePrepareRequest(StrictModel):

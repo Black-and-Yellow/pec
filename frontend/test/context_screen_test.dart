@@ -169,6 +169,8 @@ void main() {
       250,
       scrollable: find.byType(Scrollable).first,
     );
+    await tester.ensureVisible(find.byKey(const Key('analyze_payment_button')));
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('analyze_payment_button')));
     await tester.pumpAndSettle();
     expect(api.lastScoreContext, isNull);
