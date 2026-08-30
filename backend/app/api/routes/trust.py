@@ -161,15 +161,17 @@ def check_identifier(
 
         worst = min(known, key=standing)
         summary = (
-            f"{len(known)} of {examined} UPI addresses formed from this number are known to "
-            f"the network. The weakest is {worst.vpa}: "
-            f"{with_collection_warning(worst.vpa, worst.trust.headline)}"
+            f"{len(known)} of {examined} phone-shaped UPI addresses built from these "
+            f"digits have been seen in FinGuard checks before. This does not identify "
+            f"who owns the number or which bank account it belongs to. The weakest is "
+            f"{worst.vpa}: {with_collection_warning(worst.vpa, worst.trust.headline)}"
         )
     else:
         summary = (
-            f"No UPI address formed from this number is known to the FinGuard network. "
-            f"{examined} common handles were checked. That is not a clean bill of health - "
-            "it means nobody here has checked one before."
+            f"None of the {examined} phone-shaped UPI addresses built from these digits "
+            "has been seen in a FinGuard check. FinGuard cannot look up who owns a "
+            "number or which account it is linked to; it only recognises addresses it "
+            "has already seen. Silence here is not a clean bill of health."
         )
     return IdentifierCheckResponse(
         kind="MOBILE",

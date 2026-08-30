@@ -66,3 +66,25 @@ def get_current_user(
             detail={"code": "INVALID_SESSION", "message": str(exc)},
             headers={"WWW-Authenticate": "Bearer"},
         ) from exc
+
+
+def get_optional_user(
+    credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(bearer_scheme)],
+    session: Annotated[Session, Depends(get_session)],
+    auth_service: Annotated[AuthService, Depends(get_auth_service)],
+) -> User | None:
+    """Identify the caller when they are signed in, without requiring it.
+
+    Guest mode is a deliberate product decision, so a route may not demand an
+    account. It may still need to know whether one is present: an action that
+    changes what every other user sees about a third party has to be traceable
+    to somebody, while the same action taken privately does not.
+    """
+    if credentials is None or credentials.scheme.lower() != "bearer":
+        return None
+    try:
+        return auth_service.authenticate_access_token(
+            UserRepository(session), credentials.credentials
+        )
+    except AuthenticationError:
+        return None

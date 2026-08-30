@@ -202,15 +202,16 @@ class RiskEngine:
                 )
             )
 
-        # Read the ledger for the collection-account shape. This is the one
-        # signal that can see a mule: the address itself is structurally
-        # innocent, so only the traffic through it gives the pattern away.
+        # Read the check history for the collection-account shape. The address
+        # itself is structurally innocent, so only the pattern of who looks it
+        # up gives it away. This is FinGuard's own check data, not bank
+        # transaction data, and the evidence text says so.
         mule = mule_signature.assess(inputs.reputation)
         if mule.matched:
             signals.append(
                 RiskSignal(
                     code="MULE_ACCOUNT_SIGNATURE",
-                    label="This address is collecting like a money-mule account",
+                    label="This address is being checked like a circulated scam address",
                     weight=self._weights.mule_account_signature,
                     evidence=mule.evidence,
                 )

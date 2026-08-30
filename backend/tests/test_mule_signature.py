@@ -56,8 +56,8 @@ def test_the_collection_shape_is_recognised() -> None:
         )
     )
     assert result.matched is True
-    assert result.payer_count == 9
-    assert "9 different people" in result.evidence
+    assert result.check_source_count == 9
+    assert "9 independent checks" in result.evidence
 
 
 def test_the_wording_never_asserts_fraud() -> None:
@@ -70,8 +70,11 @@ def test_the_wording_never_asserts_fraud() -> None:
         )
     )
     # A busy new stall produces this same shape, so the sentence the user reads
-    # has to remain true when the payee is innocent.
+    # has to remain true when the payee is innocent - and it must never imply
+    # FinGuard can see money moving.
     assert "not as proof of fraud" in result.evidence
+    assert "not bank transaction data" in result.evidence
+    assert "payer" not in result.evidence.lower()
 
 
 def test_too_few_payers_is_noise_not_a_pattern() -> None:
@@ -195,7 +198,7 @@ def test_evidence_fits_the_schema() -> None:
     # API would if the wording ever grows past the limit again.
     RiskSignal(
         code="MULE_ACCOUNT_SIGNATURE",
-        label="This address is collecting like a money-mule account",
+        label="This address is being checked like a circulated scam address",
         weight=22,
         evidence=result.evidence,
     )

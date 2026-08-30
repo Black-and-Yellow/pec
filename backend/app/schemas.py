@@ -273,6 +273,34 @@ class TrustPillarCode(StrEnum):
     VELOCITY = "VELOCITY"
 
 
+class EvidenceProvenance(StrEnum):
+    """Where a piece of evidence came from.
+
+    Shown to the user because the four sources carry very different weight. A
+    structural read of an address is reproducible by anyone; a count of
+    FinGuard checks is real but is this network's own view and nobody else's;
+    a user report is one person's claim; seeded rows exist to make the demo
+    legible and are not observations of anything.
+    """
+
+    #: Computed from the request itself, on this device, with no lookup.
+    DEVICE_LOCAL = "DEVICE_LOCAL"
+    #: Counted from safety checks run by the FinGuard network. Not bank data.
+    FINGUARD_OBSERVED = "FINGUARD_OBSERVED"
+    #: Asserted by a person who prepared an incident report. Unverified.
+    USER_REPORTED = "USER_REPORTED"
+    #: Fixture data shipped for the demo. Not an observation.
+    SEEDED_DEMO = "SEEDED_DEMO"
+
+
+PROVENANCE_LABELS: dict[EvidenceProvenance, str] = {
+    EvidenceProvenance.DEVICE_LOCAL: "Read on this device",
+    EvidenceProvenance.FINGUARD_OBSERVED: "FinGuard checks",
+    EvidenceProvenance.USER_REPORTED: "User-reported",
+    EvidenceProvenance.SEEDED_DEMO: "Seeded demo data",
+}
+
+
 class TrustPillar(StrictModel):
     code: TrustPillarCode
     label: str = Field(min_length=1, max_length=80)
@@ -280,6 +308,7 @@ class TrustPillar(StrictModel):
     maximum: int = Field(ge=1, le=100)
     status: TrustPillarStatus
     evidence: str = Field(min_length=1, max_length=400)
+    provenance: EvidenceProvenance = EvidenceProvenance.FINGUARD_OBSERVED
 
 
 class PayeeTrust(StrictModel):
