@@ -10,6 +10,7 @@ import 'external_actions.dart';
 import 'local_store.dart';
 import 'share_intake.dart';
 import 'threat_environment.dart';
+import 'voice_api.dart';
 
 final class AppServices {
   const AppServices({
@@ -20,6 +21,7 @@ final class AppServices {
     this.shareIntake = const NoopShareIntake(),
     this.threatEnvironment = const NoopThreatEnvironment(),
     this.auth,
+    this.voice,
   });
 
   final FinGuardApi api;
@@ -29,6 +31,10 @@ final class AppServices {
   final ShareIntake shareIntake;
   final ThreatEnvironment threatEnvironment;
   final AuthController? auth;
+
+  /// Optional spoken layer. Absent in tests and on any build that does not
+  /// want it; the result screen simply omits the listen control.
+  final VoiceApi? voice;
 
   factory AppServices.production() {
     final ApiService api = ApiService(baseUri: AppConfig.apiBaseUri);
@@ -48,6 +54,7 @@ final class AppServices {
         api: AuthApiService(baseUri: AppConfig.apiBaseUri),
         store: SecureAuthStore(),
       ),
+      voice: VoiceApiService(baseUri: AppConfig.apiBaseUri),
     );
   }
 }

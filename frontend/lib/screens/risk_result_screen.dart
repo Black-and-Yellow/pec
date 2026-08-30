@@ -13,8 +13,11 @@ import '../models/trusted_contact.dart';
 import '../services/api_service.dart';
 import '../services/app_services.dart';
 import '../services/report_builder.dart';
+import '../services/voice_api.dart';
+import '../services/voice_player.dart';
 import '../theme/app_theme.dart';
 import '../widgets/common.dart';
+import '../widgets/listen_button.dart';
 import '../widgets/policy_card_drawer.dart';
 import '../widgets/trust_report.dart';
 import 'incident_screen.dart';
@@ -186,6 +189,19 @@ class _RiskResultScreenState extends State<RiskResultScreen> {
         _ExplanationCard(explanation: _explanation, aiWording: _aiWording),
         const SizedBox(height: 18),
         _ScoreSummary(assessment: widget.assessment),
+        // Directly under the score and the recommended action, because those
+        // are the two things it reads out. Drawn only when the backend says
+        // it can speak, so a deployment without voice looks exactly as it did
+        // before this layer existed.
+        if (widget.services.voice case final VoiceApi voice) ...<Widget>[
+          const SizedBox(height: 16),
+          ListenButton(
+            voice: voice,
+            player: DeviceVoicePlayer(),
+            level: widget.assessment.level,
+            score: widget.assessment.score,
+          ),
+        ],
         if (widget.payeeTrust case final PayeeTrust trust) ...<Widget>[
           const SizedBox(height: 22),
           TrustReportCard(

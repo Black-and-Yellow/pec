@@ -27,10 +27,12 @@ from app.api.routes import (
     response,
     risk,
     trust,
+    voice,
 )
-from app.config import Settings
+from app.config import BACKEND_DIRECTORY, Settings
 from app.db.database import Database
 from app.db.seed import seed_demo_data
+from app.integrations.elevenlabs_client import ElevenLabsClient
 from app.integrations.gemini_client import GeminiClient
 from app.logging_config import configure_logging
 from app.repositories.transaction_repository import TransactionRepository
@@ -39,6 +41,7 @@ from app.services.auth_service import AuthService
 from app.services.context_analyzer import ContextAnalyzer
 from app.services.context_integrity import ContextIntegrityService
 from app.services.risk_engine import RiskEngine
+from app.services.voice_service import VoiceService
 
 logger = logging.getLogger("finguard")
 _ASSESSMENT_CLEANUP_INTERVAL_SECONDS = 60 * 60
@@ -116,6 +119,21 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         gemini_client=gemini_client,
         enabled=application_settings.enable_ai_context,
         maximum_screenshot_bytes=application_settings.max_screenshot_bytes,
+    )
+    # Optional, and off unless a key is configured. The voice layer only ever
+    # reads a verdict the engine has already reached, so a deployment without
+    # it behaves exactly as it did before the layer existed.
+    elevenlabs_client = None
+    if application_settings.enable_voice_assist and application_settings.elevenlabs_api_key:
+        elevenlabs_client = ElevenLabsClient(
+            api_key=application_settings.elevenlabs_api_key,
+            model=application_settings.elevenlabs_model,
+            timeout_seconds=application_settings.elevenlabs_timeout_seconds,
+        )
+    api.state.voice_service = VoiceService(
+        client=elevenlabs_client,
+        cache_directory=BACKEND_DIRECTORY / "data" / "voice-cache",
+        enabled=application_settings.enable_voice_assist,
     )
 
     api.add_middleware(
@@ -215,6 +233,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     api.include_router(response.router, prefix=prefix)
     api.include_router(history.router, prefix=prefix)
     api.include_router(demo.router, prefix=prefix)
+    api.include_router(voice.router, prefix=prefix)
     return api
 
 

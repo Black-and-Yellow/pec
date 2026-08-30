@@ -14,6 +14,7 @@ PROJECT_DIRECTORY = BACKEND_DIRECTORY.parent
 BACKEND_ENV_FILE = BACKEND_DIRECTORY / ".env"
 PROJECT_ENV_FILE = PROJECT_DIRECTORY / ".env"
 GEMINI_MODEL_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
+ELEVENLABS_ID_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
 LOG_LEVELS = frozenset({"DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"})
 MAX_CONFIGURED_SCREENSHOT_BYTES = 2_000_000
 MAX_ASSESSMENT_RETENTION_DAYS = 365
@@ -104,6 +105,10 @@ class Settings:
     max_registered_users: int = 5_000
     google_oauth_client_ids: tuple[str, ...] = ()
     log_level: str = "INFO"
+    elevenlabs_api_key: str | None = None
+    elevenlabs_model: str = "eleven_multilingual_v2"
+    elevenlabs_timeout_seconds: float = 20.0
+    enable_voice_assist: bool = False
 
     def __post_init__(self) -> None:
         if self.app_env not in {"development", "test", "production"}:
@@ -169,6 +174,16 @@ class Settings:
             raise ValueError("GOOGLE_OAUTH_CLIENT_IDS contains an invalid client ID")
         if self.log_level not in LOG_LEVELS:
             raise ValueError(f"LOG_LEVEL must be one of {', '.join(sorted(LOG_LEVELS))}")
+        if not ELEVENLABS_ID_PATTERN.fullmatch(self.elevenlabs_model):
+            raise ValueError("ELEVENLABS_MODEL contains unsupported characters")
+        if not math.isfinite(self.elevenlabs_timeout_seconds) or not (
+            1 <= self.elevenlabs_timeout_seconds <= 60
+        ):
+            raise ValueError("ELEVENLABS_TIMEOUT_SECONDS must be between 1 and 60")
+        if self.enable_voice_assist and (
+            not self.elevenlabs_api_key or not self.elevenlabs_api_key.strip()
+        ):
+            raise ValueError("ELEVENLABS_API_KEY must be configured when ENABLE_VOICE_ASSIST is true")
 
     @classmethod
     def from_env(cls) -> Settings:
@@ -197,4 +212,8 @@ class Settings:
                 if client_id.strip()
             ),
             log_level=os.getenv("LOG_LEVEL", "INFO").strip().upper(),
+            elevenlabs_api_key=os.getenv("ELEVENLABS_API_KEY", "").strip() or None,
+            elevenlabs_model=os.getenv("ELEVENLABS_MODEL", "eleven_multilingual_v2").strip(),
+            elevenlabs_timeout_seconds=float(os.getenv("ELEVENLABS_TIMEOUT_SECONDS", "20")),
+            enable_voice_assist=_as_bool(os.getenv("ENABLE_VOICE_ASSIST"), default=False),
         )

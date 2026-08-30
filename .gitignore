@@ -63,3 +63,6 @@ tmp/
 flutter_windows_*.zip
 flutter_linux_*.tar.xz
 flutter_macos_*.zip
+
+# Synthesised verdict audio. Regenerated on demand from the fixed statements.
+backend/data/voice-cache/
