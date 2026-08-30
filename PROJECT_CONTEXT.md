@@ -171,3 +171,34 @@ The FastAPI app is a modular monolith. Routes use strict Pydantic schemas, servi
 - A SAFE result means the configured signals did not fire, not that the payee is legitimate.
 - Android production distribution requires an operator-provided keystore and HTTPS API origin. The explicit demo release is debug-signed and non-distributable.
 - Email verification and password recovery are intentionally deferred until a transactional email provider is selected.
+
+
+## Current state (2026-08-30)
+
+Verified counts: **351 backend tests**, **137 Flutter tests**, **11 real-stack
+browser tests**. `ruff`, `mypy` and `flutter analyze` clean.
+
+Added since the last update:
+
+- **Identifier checker** - one field accepts a `upi://pay` link, a bare UPI ID,
+  or an Indian mobile number. A number expands to phone-shaped addresses
+  FinGuard has already observed; it does not identify the number's owner.
+- **Policy Card** (`GET /api/v1/policy/card`) - versioned, backend-owned, every
+  weight with a reason and a source category, plus the limitations and an
+  explicit statement that the points are intervention values rather than
+  calibrated probabilities.
+- **Intent Shield** - optional pre-analysis expectation, compared against the
+  request direction, reported separately and never scored.
+- **Provenance labels** on every trust pillar.
+- **Report gating** - only an authenticated account's incident report can move
+  a shared trust grade.
+
+Known limitations, stated because they are the honest boundary rather than a
+backlog:
+
+- SQLite, single node. Documented rather than migrated.
+- `device_id` is client-supplied, so reach and tenure resist noise but not a
+  determined attacker.
+- Seeded demo rows exist so the demo is legible. They are labelled everywhere
+  they surface.
+- No Android SDK on the current build machine, so APKs come from CI.
