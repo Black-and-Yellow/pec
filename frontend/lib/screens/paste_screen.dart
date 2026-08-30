@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 import '../models/context_analysis.dart';
@@ -346,20 +348,35 @@ class _IntentPicker extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 10),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: <Widget>[
-            for (final PaymentIntent intent in PaymentIntent.values)
-              ChoiceChip(
-                key: Key('intent_${intent.apiValue}'),
-                label: Text(intent.label),
-                selected: selected == intent,
-                onSelected: enabled
-                    ? (bool value) => onChanged(value ? intent : null)
-                    : null,
-              ),
-          ],
+        // A chip sizes itself to its label, so on a narrow phone the longest
+        // option ran past its own border and lost the last characters. Capping
+        // the label to the space actually available lets it wrap onto a second
+        // line instead, which also holds at a large text scale.
+        LayoutBuilder(
+          builder: (BuildContext context, BoxConstraints constraints) => Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: <Widget>[
+              for (final PaymentIntent intent in PaymentIntent.values)
+                ChoiceChip(
+                  key: Key('intent_${intent.apiValue}'),
+                  label: ConstrainedBox(
+                    constraints: BoxConstraints(
+                      maxWidth: math.max(120, constraints.maxWidth - 52),
+                    ),
+                    child: Text(
+                      intent.label,
+                      softWrap: true,
+                      overflow: TextOverflow.visible,
+                    ),
+                  ),
+                  selected: selected == intent,
+                  onSelected: enabled
+                      ? (bool value) => onChanged(value ? intent : null)
+                      : null,
+                ),
+            ],
+          ),
         ),
       ],
     ),

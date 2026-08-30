@@ -8,7 +8,7 @@ enum PaymentIntent {
   sendMoney('SEND_MONEY', 'I expect to send money'),
   receiveMoney('RECEIVE_MONEY', 'I expect to receive money'),
   refundOrReward('REFUND_OR_REWARD', 'I was promised a refund or reward'),
-  verifyKyc('VERIFY_KYC_OR_ACCOUNT', 'I was told this verifies KYC or account access'),
+  verifyKyc('VERIFY_KYC_OR_ACCOUNT', 'I was told this verifies my KYC'),
   inspectOnly('INSPECT_ONLY', 'I only want to inspect this request');
 
   const PaymentIntent(this.apiValue, this.label);
