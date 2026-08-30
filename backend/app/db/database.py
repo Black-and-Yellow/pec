@@ -43,6 +43,23 @@ class Database:
 
     def create_schema(self) -> None:
         Base.metadata.create_all(self.engine)
+        self._migrate_sqlite_schema()
+
+    def _migrate_sqlite_schema(self) -> None:
+        if not self.engine.url.drivername.startswith("sqlite"):
+            return
+        with self.engine.begin() as conn:
+            table_check = conn.execute(
+                text("SELECT name FROM sqlite_master WHERE type='table' AND name='risk_assessments'")
+            ).fetchone()
+            if table_check:
+                columns = [
+                    row[1]
+                    for row in conn.execute(text("PRAGMA table_info(risk_assessments)")).fetchall()
+                ]
+                if "reported_at" not in columns:
+                    conn.execute(text("ALTER TABLE risk_assessments ADD COLUMN reported_at DATETIME"))
+
 
     @contextmanager
     def session(self) -> Iterator[Session]:

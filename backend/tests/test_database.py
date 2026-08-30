@@ -57,9 +57,7 @@ def test_sqlite_pragmas_and_demo_seed_are_stable_across_restarts() -> None:
 
             transactions = TransactionRepository(session)
             indicators = IndicatorRepository(session)
-            assert transactions.has_completed_payment_to(
-                "demo-device", " COFFEE.CORNER@OKAXIS "
-            )
+            assert transactions.has_completed_payment_to("demo-device", " COFFEE.CORNER@OKAXIS ")
             assert transactions.typical_completed_amount("demo-device") == Decimal("240.00")
             assert indicators.find_vpa(" SECURE-KYC-UPDATE@OKAXIS ") is not None
     finally:
@@ -112,9 +110,7 @@ def test_expired_assessments_are_pruned_without_removing_completed_history() -> 
             session.add_all([completed, assessment])
             session.commit()
 
-            deleted = TransactionRepository(session).delete_expired_assessments(
-                retention_days=30
-            )
+            deleted = TransactionRepository(session).delete_expired_assessments(retention_days=30)
 
             assert deleted == 1
             assert session.get(Transaction, "completed-history") is not None
@@ -165,5 +161,39 @@ def test_stale_refresh_sessions_are_pruned_without_revoking_active_sessions() ->
             assert session.get(RefreshSession, "expired") is None
             assert session.get(RefreshSession, "old-revoked") is None
             assert session.get(RefreshSession, "active") is not None
+    finally:
+        database.dispose()
+
+
+def test_sqlite_migration_adds_reported_at_column() -> None:
+    database = Database("sqlite://")
+    try:
+        with database.engine.begin() as conn:
+            conn.exec_driver_sql(
+                """
+                CREATE TABLE risk_assessments (
+                    id VARCHAR(64) PRIMARY KEY,
+                    transaction_id VARCHAR(64) UNIQUE,
+                    score INTEGER NOT NULL,
+                    level VARCHAR(16) NOT NULL,
+                    recommended_action TEXT NOT NULL,
+                    created_at DATETIME NOT NULL
+                )
+                """
+            )
+            columns_before = [
+                row[1]
+                for row in conn.exec_driver_sql("PRAGMA table_info(risk_assessments)").fetchall()
+            ]
+            assert "reported_at" not in columns_before
+
+        database.create_schema()
+
+        with database.engine.connect() as conn:
+            columns_after = [
+                row[1]
+                for row in conn.exec_driver_sql("PRAGMA table_info(risk_assessments)").fetchall()
+            ]
+            assert "reported_at" in columns_after
     finally:
         database.dispose()
