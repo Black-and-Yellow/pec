@@ -51,7 +51,7 @@ def test_live_uvicorn_health_parse_errors_and_demo_risk_results(
         expected_results = {
             "coffee-shop": (0, "SAFE"),
             "tea-stall": (23, "SAFE"),
-            "marketplace-seller": (33, "CAUTION"),
+            "marketplace-seller": (37, "CAUTION"),
             "fake-kyc": (100, "HIGH"),
         }
         observed_levels: list[str] = []

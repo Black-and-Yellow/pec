@@ -213,11 +213,18 @@ able to move a third party's grade.
 device, FinGuard checks, user-reported, or seeded demo. The four are not
 equally strong and the UI says which is which.
 
-Reputation is keyed on a client-supplied device identifier. That is adequate
-against casual noise and is *not* authenticated payer intelligence; the Policy
-Card states this among its limitations. The report-preparation path that can
-cap a shared grade is gated behind an authenticated account for the same
-reason.
+Reputation is keyed on a client-supplied device identifier that can be
+manipulated, so reach, tenure and velocity can be inflated by anyone willing to
+do so. Two consequences follow, and both are enforced in code:
+
+- **Nothing writes to shared reputation from a user action.** `record_report`
+  and its caller were removed outright rather than gated, because gating still
+  turned an exploratory tap on a draft screen into a permanent public
+  accusation.
+- **Standing may escalate a signal, never discount one.** The flat
+  `unusual_amount` weight is a floor for every grade including the best, so a
+  large first payment to a top-rated address is not quietened by reputation
+  that anyone could inflate.
 
 ## Relationship to bank-side systems
 

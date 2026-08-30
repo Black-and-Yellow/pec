@@ -73,7 +73,7 @@ final class DemoRepository {
         currency: 'INR',
       ),
       assessment: RiskAssessment(
-        score: 33,
+        score: 37,
         level: RiskLevel.caution,
         signals: <RiskSignal>[
           RiskSignal(
@@ -86,7 +86,7 @@ final class DemoRepository {
           RiskSignal(
             code: 'AMOUNT_SCALED_BY_TRUST',
             label: "Amount risk is scaled by the recipient's network record",
-            weight: 15,
+            weight: 19,
             evidence:
                 'INR 4500.00 is high for a new recipient; payee trust grade NEW '
                 'scales this contribution.',

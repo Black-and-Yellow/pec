@@ -379,33 +379,35 @@ class RiskEngine:
         unusual_threshold: Decimal,
         grade: TrustGrade,
     ) -> int:
-        """Scale an unusual amount within the named policy ceiling."""
+        """Escalate an unusual amount by standing. Never discount it.
+
+        The ledger is keyed on a client-supplied device identifier, which
+        resists casual noise and does not resist a determined attacker. Any
+        path where a better grade *lowers* a signal is therefore a path where
+        a manufactured reputation buys silence, and an unusual first payment
+        is exactly where that would be worth manufacturing.
+
+        So the flat UNUSUAL_AMOUNT weight is a floor, not a starting point.
+        Community standing may raise concern above it and may never take the
+        score below it. A well-regarded address earns the benefit of the doubt
+        everywhere else in the report; it does not earn a quieter alarm on a
+        large payment to someone this device has never paid.
+        """
         ceiling = self._weights.amount_scaled_by_trust
+        floor = self._weights.unusual_amount
         severity = TRUST_GRADE_SEVERITY[grade]
-        if severity == 0:
-            return 0
         amount_scale = min(
             Decimal(1),
             amount / (unusual_threshold * AMOUNT_SCALE_SATURATION_MULTIPLIER),
         )
-        # The flat UNUSUAL_AMOUNT weight is the baseline for a payee nobody can
-        # vouch for, and trust discounts it from there. Deriving it the other
-        # way round - building up from zero - made the scaling weaker than the
-        # signal it replaced, so INR 4,500 to an address nobody had ever seen
-        # scored below the flat weight and came out SAFE. A grade that only
-        # means "no track record" is not a reason to worry less.
-        #
-        # The discount is proportional rather than a step at one grade. A step
-        # let a single observation nudge a payee across a boundary and flip the
-        # same payment from CAUTION to SAFE between two checks; a proportional
-        # discount moves it by one band's worth instead.
         severity_fraction = Decimal(severity) / Decimal(MAXIMUM_TRUST_GRADE_SEVERITY)
-        baseline = Decimal(self._weights.unusual_amount) * severity_fraction
-        escalation = Decimal(ceiling - self._weights.unusual_amount) * amount_scale
-        return min(
-            ceiling,
-            int((baseline + escalation).to_integral_value(rounding=ROUND_CEILING)),
+        # Whichever is worse drives the escalation: a very large amount and a
+        # very poor grade are each sufficient on their own.
+        escalation = Decimal(ceiling - floor) * max(severity_fraction, amount_scale)
+        scaled = int(
+            (Decimal(floor) + escalation).to_integral_value(rounding=ROUND_CEILING)
         )
+        return min(ceiling, max(floor, scaled))
 
     @staticmethod
     def _has_missing_qr_provenance(

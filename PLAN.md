@@ -201,3 +201,32 @@ Decisions worth recording:
 
 Not done: Milestone 4 (verdict comparison view) was scoped as optional and is
 not implemented. No push, merge, deploy, or PR was performed.
+
+
+## Second-opinion review follow-up (2026-08-30)
+
+Three findings, all addressed on `edits`.
+
+1. **Draft preparation must not publish.** Gating `record_report` behind an
+   authenticated account was not enough: reading what a report would say is
+   not consent to file one. The call and both supporting methods
+   (`ReputationRepository.record_report`, `TransactionRepository.mark_reported`)
+   were removed, along with the `get_optional_user` dependency added for the
+   gate. Nothing in the app now writes a report count.
+2. **Standing must not manufacture safety.** The proportional amount weight
+   pre-dates this branch and let a good grade drop the signal below the flat
+   `unusual_amount` baseline. It is now floored at that baseline for every
+   grade; standing escalates toward the ceiling and never below it.
+3. **Policy card absolutes softened**, and sources re-attributed: nine signals
+   moved to `FINGUARD_POLICY` where no advisory supports the specific
+   statement. The device-identifier limitation now says plainly that client
+   identifiers can be manipulated.
+
+Tests added in `tests/test_review_followups.py` (40 cases): guest and
+authenticated draft behaviour, invalid bearer token, `already_paid=false`,
+repeated drafts for one address, absence of the publish path, the A-to-A+
+amount boundary, a huge first payment to an A+ address, consecutive-snapshot
+stability, and exact 29/30 and 69/70 band edges.
+
+Gates: 391 backend tests at 95% branch coverage, 137 Flutter tests, 11 browser
+tests, ruff, mypy and analyze clean.

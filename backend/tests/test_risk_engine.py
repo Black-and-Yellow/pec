@@ -5,7 +5,7 @@ from decimal import Decimal
 import pytest
 
 from app.db.models import FraudIndicator
-from app.risk_policy import RiskWeights
+from app.risk_policy import WEIGHTS, RiskWeights
 from app.schemas import (
     ContextSignals,
     PayeeTrust,
@@ -316,9 +316,18 @@ def test_trust_scaled_amount_orders_grades_without_unusual_amount_double_countin
     ]
     scores = [result.score for result in results]
 
+    # Non-decreasing rather than strictly distinct. Standing may only escalate
+    # an unusual amount, so a large enough sum saturates every grade at the
+    # ceiling and ties are the correct outcome there.
     assert scores == sorted(scores)
-    assert len(set(scores)) == len(scores)
-    assert _signal_weight(results[0], "AMOUNT_SCALED_BY_TRUST") == 0
+    # The flat weight is a floor for every grade, including the best one. The
+    # ledger is keyed on client-supplied identifiers, so a path where good
+    # standing lowers this signal is a path where a manufactured reputation
+    # buys a quieter alarm on a large payment to an unknown recipient.
+    assert all(
+        _signal_weight(result, "AMOUNT_SCALED_BY_TRUST") >= WEIGHTS.unusual_amount
+        for result in results
+    )
     assert all(_signal_weight(result, "AMOUNT_SCALED_BY_TRUST") <= 20 for result in results)
     assert all(
         "UNUSUAL_AMOUNT" not in {signal.code for signal in result.signals} for result in results
@@ -326,6 +335,13 @@ def test_trust_scaled_amount_orders_grades_without_unusual_amount_double_countin
 
 
 def test_trust_scaled_amount_rises_with_amount() -> None:
+    """Amount escalates the signal on its own.
+
+    Tested at the best grade on purpose. A poor grade already saturates the
+    ceiling from severity alone, so it cannot show an amount effect - and the
+    case that matters is precisely that a well-regarded address does not get a
+    quieter alarm as the sum grows.
+    """
     engine = RiskEngine()
     smaller = engine.score(
         RiskInputs(
@@ -333,7 +349,7 @@ def test_trust_scaled_amount_rises_with_amount() -> None:
             known_payee=False,
             typical_amount=Decimal("100"),
             indicator=None,
-            payee_trust=_payee_trust(TrustGrade.D),
+            payee_trust=_payee_trust(TrustGrade.A_PLUS),
         )
     )
     larger = engine.score(
@@ -342,7 +358,7 @@ def test_trust_scaled_amount_rises_with_amount() -> None:
             known_payee=False,
             typical_amount=Decimal("100"),
             indicator=None,
-            payee_trust=_payee_trust(TrustGrade.D),
+            payee_trust=_payee_trust(TrustGrade.A_PLUS),
         )
     )
 

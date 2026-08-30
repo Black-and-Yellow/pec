@@ -3,10 +3,15 @@
 The scoring policy is the part of this app a judge is most entitled to be
 sceptical about. Numbers on a screen look like measurements, and these are
 not: they are intervention values chosen by hand so that the combinations
-that matter cross a threshold at the right moment. Published advisories from
-NPCI, RBI and I4C support the *direction* of every signal below - that these
-things are associated with fraud - and support none of the exact point
-values. Nothing here was fitted to a labelled dataset.
+that matter cross a threshold at the right moment. Nothing here was fitted to
+a labelled dataset.
+
+Where a published advisory from NPCI, RBI or I4C warns about the behaviour a
+signal looks for, that source is named. Where it does not - because the
+signal is a heuristic of FinGuard's own, or because the advisory describes
+the behaviour without supporting how this app weighs it - the source is
+FINGUARD_POLICY, and saying so is the point. No source is cited for any point
+value, because none supports one.
 
 Saying that plainly is worth more than an invented accuracy figure, so the
 card states it in its own text and the API serves it to the app rather than
@@ -33,9 +38,11 @@ LIMITATIONS: tuple[str, ...] = (
     "account, the recipient's account, or any transaction.",
     "Reputation counts safety checks run by FinGuard users, not payments. An "
     "address with no record is unknown here, not proven safe.",
-    "The device identifier a check is attributed to is supplied by the client, "
-    "so reach and tenure are resistant to casual noise but not to a determined "
-    "attacker. They are not authenticated payer intelligence.",
+    "The device identifier a check is attributed to is supplied by the client "
+    "and can be manipulated, so reach, tenure and velocity can be inflated by "
+    "anyone willing to do so. They are not authenticated payer intelligence, "
+    "and community standing may raise concern but is never allowed to reduce "
+    "a signal below its baseline.",
     "Seeded demo rows exist to make the demo legible and are labelled as such. "
     "They are not observations of real activity.",
     "Scores are not probabilities. A score of 60 does not mean a 60% chance of "
@@ -87,16 +94,17 @@ SIGNAL_RATIONALES: dict[str, SignalRationale] = {
     "remote_access_tool": SignalRationale(
         title="A remote-access app is installed",
         rationale=(
-            "Screen-sharing tools let a caller watch and drive the payment. Both "
-            "NPCI and RBI name this as a hallmark of support and arrest scams."
+            "Screen-sharing tools let another person watch and guide the "
+            "payment. Official advisories warn against installing one at a "
+            "caller's request."
         ),
         source=SourceCategory.NPCI_ADVISORY,
     ),
     "active_call": SignalRationale(
         title="A call is in progress during the check",
         rationale=(
-            "Large UPI frauds are talked through live, because a caller can "
-            "override hesitation that a message cannot."
+            "Official advisories warn that scammers may call while a payment "
+            "is being made, because a live caller can push past hesitation."
         ),
         source=SourceCategory.RBI_ADVISORY,
     ),
@@ -111,26 +119,28 @@ SIGNAL_RATIONALES: dict[str, SignalRationale] = {
     "call_with_remote_access": SignalRationale(
         title="A live call plus screen sharing",
         rationale=(
-            "Added on top of both parts because the pair is the digital-arrest "
-            "setup, and is far more dangerous than either alone."
+            "Added on top of both parts. Advisories describe this pairing in "
+            "impersonation scams; treating it as worse than either alone is "
+            "FinGuard's own judgement."
         ),
-        source=SourceCategory.I4C_ADVISORY,
+        source=SourceCategory.FINGUARD_POLICY,
     ),
     "payee_identity_impersonation": SignalRationale(
         title="The address borrows a bank or agency name",
         rationale=(
-            "A consumer handle claiming a bank, regulator or police identity "
-            "cannot be what it says it is. No genuine institution collects this way."
+            "A consumer handle carrying a bank, regulator or police name may "
+            "be imitating that institution. Verify independently, through a "
+            "channel you already trust."
         ),
         source=SourceCategory.NPCI_ADVISORY,
     ),
     "payee_address_pretext": SignalRationale(
         title="The address names a reason to pay",
         rationale=(
-            "Words such as kyc, refund or verify describe an excuse rather than a "
-            "person or a shop. A real payee has no reason to carry one."
+            "Words such as kyc, refund or verify describe a reason to pay "
+            "rather than a person or a shop. Treated as a prompt to verify."
         ),
-        source=SourceCategory.NPCI_ADVISORY,
+        source=SourceCategory.FINGUARD_POLICY,
     ),
     "payee_address_disposable": SignalRationale(
         title="The address is a bare phone number",
@@ -159,10 +169,11 @@ SIGNAL_RATIONALES: dict[str, SignalRationale] = {
     "mule_account_signature": SignalRationale(
         title="Checked like a circulated scam address",
         rationale=(
-            "Many unrelated people looked this address up once each, in a short "
-            "window, with no history behind it. Check-pattern evidence only."
+            "Many unrelated people looked this address up once each, in a "
+            "short window, with no history behind it. FinGuard check-pattern "
+            "evidence only, not transaction data."
         ),
-        source=SourceCategory.I4C_ADVISORY,
+        source=SourceCategory.FINGUARD_POLICY,
     ),
     "payee_name_unverified_informational": SignalRationale(
         title="The claimed name cannot be checked here",
@@ -175,16 +186,18 @@ SIGNAL_RATIONALES: dict[str, SignalRationale] = {
     "payee_name_unverified_borrowed_brand": SignalRationale(
         title="The claimed name borrows an organisation",
         rationale=(
-            "The name on the request claims a bank or agency the handle does not "
-            "back. Scored because the name is chosen by whoever made the request."
+            "The name on the request carries a bank or agency the handle does "
+            "not back. Scored because that name is chosen by whoever made the "
+            "request, not by a bank."
         ),
         source=SourceCategory.NPCI_ADVISORY,
     ),
     "first_time_payee": SignalRationale(
         title="First payment to this address from this device",
         rationale=(
-            "Read from this device's own history. Most fraud is a first payment, "
-            "but so is every genuine new payee, so it never decides a verdict alone."
+            "First payments lack device-local history: there is no record of "
+            "paying this address before. Every genuine new payee looks the "
+            "same, so this never decides a verdict alone."
         ),
         source=SourceCategory.FINGUARD_POLICY,
     ),
@@ -199,10 +212,10 @@ SIGNAL_RATIONALES: dict[str, SignalRationale] = {
     "amount_not_specified_corroborated": SignalRationale(
         title="No amount, alongside other warnings",
         rationale=(
-            "An open-ended amount stops being ordinary once something else is "
-            "wrong: it is how a caller dictates the figure."
+            "An open-ended amount is ordinary alone, but lets a caller name "
+            "the figure. Combining it with other warnings is FinGuard policy."
         ),
-        source=SourceCategory.RBI_ADVISORY,
+        source=SourceCategory.FINGUARD_POLICY,
     ),
     "unusual_amount": SignalRationale(
         title="Amount is high for a new recipient",
@@ -231,10 +244,10 @@ SIGNAL_RATIONALES: dict[str, SignalRationale] = {
     "suspicious_note": SignalRationale(
         title="Pressure or pretext wording in the note",
         rationale=(
-            "Urgency, KYC, reward and support language in the payment note is a "
-            "documented social-engineering pattern."
+            "Advisories warn about urgency, KYC, reward and support wording. "
+            "Matching it inside a payment note is FinGuard's own rule."
         ),
-        source=SourceCategory.RBI_ADVISORY,
+        source=SourceCategory.FINGUARD_POLICY,
     ),
     "identifier_relationship": SignalRationale(
         title="Linked to other seeded suspicious identifiers",
@@ -247,7 +260,8 @@ SIGNAL_RATIONALES: dict[str, SignalRationale] = {
     "context_impersonation": SignalRationale(
         title="The message impersonates an organisation",
         rationale=(
-            "From analysis of a message the user chose to share. Context never "
+            "From analysis of a message the user chose to share. Advisories "
+            "warn that scammers may pose as an institution. Context never "
             "sets the verdict; it only adds weight."
         ),
         source=SourceCategory.NPCI_ADVISORY,
@@ -255,34 +269,34 @@ SIGNAL_RATIONALES: dict[str, SignalRationale] = {
     "context_urgency": SignalRationale(
         title="The message applies urgency",
         rationale=(
-            "Manufactured time pressure is the most consistent feature of "
-            "payment fraud across every advisory."
+            "Official advisories warn that scammers may manufacture time "
+            "pressure so the payer acts before checking."
         ),
         source=SourceCategory.RBI_ADVISORY,
     ),
     "context_kyc_threat": SignalRationale(
         title="The message threatens KYC or account blocking",
         rationale=(
-            "A named pretext with a deadline. Weighted above generic urgency "
-            "because it gives the victim a concrete reason to comply."
+            "Advisories warn about KYC and account-blocking pretexts. "
+            "Weighting it above generic urgency is FinGuard policy."
         ),
         source=SourceCategory.NPCI_ADVISORY,
     ),
     "context_reward_or_refund": SignalRationale(
         title="The message promises a refund or reward",
         rationale=(
-            "Receiving money never requires you to pay or enter a PIN. Low "
-            "weight because genuine refund messages exist."
+            "Receiving money does not require you to approve a payment or "
+            "enter a PIN. Low weight because genuine refund messages exist."
         ),
         source=SourceCategory.NPCI_ADVISORY,
     ),
     "context_suspicious_support": SignalRationale(
         title="The message claims to be customer support",
         rationale=(
-            "Fake helpline numbers are a documented route into remote-access "
-            "and refund scams."
+            "Advisories warn that helpline numbers found by search may be "
+            "fraudulent. Weighted as a prompt to verify the number."
         ),
-        source=SourceCategory.I4C_ADVISORY,
+        source=SourceCategory.NPCI_ADVISORY,
     ),
 }
 

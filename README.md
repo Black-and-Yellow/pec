@@ -67,10 +67,18 @@ Every piece of evidence is labelled with where it came from:
 | User-reported | One person's unverified claim, made by preparing an incident report |
 | Seeded demo data | Fixture rows shipped to make the demo legible; not observations |
 
-Only a signed-in account's report affects a shared trust grade. A guest still
-gets the incident draft, because the recovery steps are the point of that
-screen, but an anonymous caller cannot change what other users see about a
-third party.
+**Preparing an incident draft publishes nothing about anybody.** Reading what a
+report would say is not consent to file one, so no caller - signed in or not -
+can change what other users see about a third party. Publishing would belong to
+a submission endpoint that does not exist yet, and would need verified
+identity, an explicit opt-in, confirmation the payment happened, one report per
+person per address, rate limiting and moderation.
+
+Community standing may raise concern about an unusual amount and is never
+allowed to reduce one below its baseline. Reputation is keyed on a
+client-supplied device identifier that can be manipulated, so a path where good
+standing quietens a signal is a path where a manufactured reputation buys
+silence.
 
 
 ## Architecture
