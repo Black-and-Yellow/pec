@@ -14,6 +14,7 @@ import '../services/app_services.dart';
 import '../services/report_builder.dart';
 import '../theme/app_theme.dart';
 import '../widgets/common.dart';
+import '../widgets/policy_card_drawer.dart';
 import '../widgets/trust_report.dart';
 import 'incident_screen.dart';
 
@@ -222,6 +223,11 @@ class _RiskResultScreenState extends State<RiskResultScreen> {
           headerKey: const Key('why_this_score_toggle'),
           child: _SignalListContent(assessment: widget.assessment),
         ),
+        // Directly under the signal list, because that is where a sceptical
+        // reader forms the question this answers: where do the numbers come
+        // from, and who decided them?
+        const SizedBox(height: 14),
+        PolicyCardDrawer(load: widget.services.api.fetchPolicyCard),
       ],
     );
     final bool showQuickStop =
@@ -1341,13 +1347,14 @@ class _PayeeNameClaimCard extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 8),
-              // The instruction above is not advice FinGuard invented: every
-              // UPI app has been required to show the bank-verified name
-              // since 1 June 2026. Citing the rule tells the user the check
-              // is guaranteed to be available, not merely likely.
+              // Not advice FinGuard invented: NPCI circular
+              // UPI/OC/101A/FY-2025-26 required apps to display the
+              // bank-verified beneficiary name, compliance due 30 June 2025.
+              // Citing the rule tells the user the check is guaranteed to be
+              // available, not merely likely.
               Text(
-                'Every UPI app in India has been required to show the '
-                'bank-verified name since 1 June 2026.',
+                'NPCI has required UPI apps to show the bank-verified '
+                'beneficiary name since 30 June 2025.',
                 key: const Key('payee_name_mandate_citation'),
                 style: Theme.of(context).textTheme.labelSmall?.copyWith(
                   color: AppColors.inkMuted,

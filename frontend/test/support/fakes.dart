@@ -7,6 +7,7 @@ import 'package:finguard/models/context_analysis.dart';
 import 'package:finguard/models/identifier_check.dart';
 import 'package:finguard/models/payee_trust.dart';
 import 'package:finguard/models/payment.dart';
+import 'package:finguard/models/policy_card.dart';
 import 'package:finguard/models/risk.dart';
 import 'package:finguard/models/risk_explanation.dart';
 import 'package:finguard/services/api_service.dart';
@@ -151,6 +152,14 @@ final class FakeApi implements FinGuardApi {
       addressesExamined: 1,
       summary: '${trust.headline}.',
     );
+  }
+
+  int policyCardCount = 0;
+
+  @override
+  Future<PolicyCard> fetchPolicyCard() async {
+    policyCardCount += 1;
+    return PolicyCard.fromApiJson(policyCardJson());
   }
 
   @override
@@ -480,3 +489,51 @@ final class FakeThreatEnvironment implements ThreatEnvironment {
     return permissionGranted;
   }
 }
+
+
+Map<String, Object?> policyCardJson() => <String, Object?>{
+  'policy_version': 'test-1',
+  'bands': <Object?>[
+    <String, Object?>{
+      'name': 'SAFE',
+      'minimum': 0,
+      'maximum': 29,
+      'meaning': 'Nothing strong enough to interrupt.',
+    },
+    <String, Object?>{
+      'name': 'CAUTION',
+      'minimum': 30,
+      'maximum': 69,
+      'meaning': 'Worth confirming before paying.',
+    },
+    <String, Object?>{
+      'name': 'HIGH',
+      'minimum': 70,
+      'maximum': 100,
+      'meaning': 'Stop and verify independently.',
+    },
+  ],
+  'signals': <Object?>[
+    <String, Object?>{
+      'field': 'remote_access_tool',
+      'title': 'A remote-access app is installed',
+      'points': 25,
+      'rationale': 'Screen-sharing tools let a caller drive the payment.',
+      'source_category': 'NPCI_ADVISORY',
+      'source_link': 'https://www.npci.org.in/fraud-awareness',
+    },
+    <String, Object?>{
+      'field': 'first_time_payee',
+      'title': 'First payment to this address',
+      'points': 18,
+      'rationale': 'Read from this device history.',
+      'source_category': 'FINGUARD_POLICY',
+      'source_link': '',
+    },
+  ],
+  'limitations': <Object?>['FinGuard cannot see your bank account.'],
+  'calibration_statement':
+      'Official guidance supports the risk factor, not the exact numeric '
+      "points. FinGuard's points are deterministic intervention values and "
+      'are not statistically calibrated fraud probabilities.',
+};

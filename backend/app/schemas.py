@@ -344,6 +344,34 @@ class PayeeTrust(StrictModel):
     disclaimer: str = Field(min_length=1, max_length=400)
 
 
+class PolicyBandPayload(StrictModel):
+    name: Literal["SAFE", "CAUTION", "HIGH"]
+    minimum: int = Field(ge=0, le=100)
+    maximum: int = Field(ge=0, le=100)
+    meaning: str = Field(min_length=1, max_length=200)
+
+
+class PolicySignalPayload(StrictModel):
+    field: str = Field(min_length=1, max_length=64)
+    title: str = Field(min_length=1, max_length=80)
+    points: int = Field(ge=0, le=100)
+    rationale: str = Field(min_length=1, max_length=400)
+    source_category: Literal[
+        "NPCI_ADVISORY", "RBI_ADVISORY", "I4C_ADVISORY", "FINGUARD_POLICY"
+    ]
+    source_link: str = Field(max_length=300)
+
+
+class PolicyCardResponse(StrictModel):
+    """How the score is built, served by the side that owns the numbers."""
+
+    policy_version: str = Field(min_length=1, max_length=32)
+    bands: list[PolicyBandPayload]
+    signals: list[PolicySignalPayload]
+    limitations: list[str]
+    calibration_statement: str = Field(min_length=1, max_length=400)
+
+
 class TrustLookupRequest(StrictModel):
     vpa: str = Field(min_length=3, max_length=193)
 

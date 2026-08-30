@@ -227,11 +227,11 @@ class RiskEngine:
                 if borrowed_brand is not None
                 else self._weights.payee_name_unverified_informational
             )
-            # Since 1 June 2026 every UPI app must display the bank-verified
-            # payee name before confirmation, so the comparison this evidence
-            # asks for is one the payer is guaranteed to be able to make on the
-            # very next screen. That turns a limitation FinGuard cannot fix
-            # into a specific, checkable instruction.
+            # NPCI circular UPI/OC/101A/FY-2025-26 required UPI apps to show
+            # the bank-verified beneficiary name, with compliance by
+            # 30 June 2025. The comparison this evidence asks for is therefore
+            # one the payer can make on the very next screen, which turns a
+            # limitation FinGuard cannot fix into a checkable instruction.
             evidence = (
                 f"The claimed payee name uses '{borrowed_brand}', but the VPA handle does not "
                 "back that organisation. Your UPI app must show the bank-verified name before "

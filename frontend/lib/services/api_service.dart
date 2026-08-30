@@ -9,6 +9,7 @@ import '../models/context_analysis.dart';
 import '../models/identifier_check.dart';
 import '../models/payee_trust.dart';
 import '../models/payment.dart';
+import '../models/policy_card.dart';
 import '../models/risk.dart';
 import '../models/risk_explanation.dart';
 import 'threat_environment.dart';
@@ -29,6 +30,9 @@ abstract interface class FinGuardApi {
 
   /// Check whatever the user pasted: a link, a UPI ID, or a phone number.
   Future<IdentifierCheck> checkIdentifier(String value);
+
+  /// The scoring policy, fetched so the app never keeps its own copy.
+  Future<PolicyCard> fetchPolicyCard();
 
   Future<RiskExplanation> explainAssessment({
     required String assessmentId,
@@ -191,6 +195,16 @@ final class ApiService implements FinGuardApi {
     }
   }
 
+  @override
+  Future<PolicyCard> fetchPolicyCard() async {
+    final Map<String, Object?> json = await _get('api/v1/policy/card');
+    try {
+      return PolicyCard.fromApiJson(json);
+    } on FormatException catch (error) {
+      throw ApiException(error.message.toString());
+    }
+  }
+
   static final RegExp _vpaPattern = RegExp(
     r'^[A-Za-z0-9][A-Za-z0-9._-]{0,127}@[A-Za-z0-9][A-Za-z0-9.-]{0,63}$',
   );
@@ -285,6 +299,45 @@ final class ApiService implements FinGuardApi {
       throw const ApiException('The server could not prepare a report draft.');
     }
     return report;
+  }
+
+  Future<Map<String, Object?>> _get(String path) async {
+    try {
+      final http.Response response = await _client
+          .get(
+            _endpoint(path),
+            headers: const <String, String>{'accept': 'application/json'},
+          )
+          .timeout(timeout);
+      final Object? decoded = _decodeBody(response);
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        throw ApiException(
+          _errorMessage(decoded, response.statusCode),
+          retryable: response.statusCode >= 500,
+          statusCode: response.statusCode,
+        );
+      }
+      if (decoded is! Map<Object?, Object?>) {
+        throw const ApiException('The server returned an unexpected response.');
+      }
+      return decoded.map(
+        (Object? key, Object? value) => MapEntry(key.toString(), value),
+      );
+    } on TimeoutException {
+      throw const ApiException(
+        'FinGuard took too long to respond. Check the connection and try again.',
+        retryable: true,
+      );
+    } on http.ClientException {
+      throw const ApiException(
+        'FinGuard cannot reach the safety service right now.',
+        retryable: true,
+      );
+    } on FormatException {
+      throw const ApiException(
+        'The server returned unreadable data. Please try again.',
+      );
+    }
   }
 
   Future<Map<String, Object?>> _post(
